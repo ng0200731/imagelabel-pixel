@@ -530,6 +530,43 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
   background: #000;
 }
 
+/* Greyscale indicator images (non-clickable visual indicators) */
+.library-card.greyscale-indicator {
+  pointer-events: none;
+  cursor: default;
+  opacity: 0.6;
+  position: relative;
+}
+
+.library-card.greyscale-indicator img {
+  filter: grayscale(100%);
+  pointer-events: none;
+}
+
+.library-card.greyscale-indicator * {
+  pointer-events: none;
+}
+
+/* "chosen" overlay text for greyscale indicators */
+.chosen-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  z-index: 10;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
 /* Ensure preview-grid in upload area has proper scrolling */
 #dropzone .preview-grid {
     flex: 1;

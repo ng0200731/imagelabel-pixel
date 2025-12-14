@@ -1005,53 +1005,63 @@
         }
     }
 
-    // Display a page of images (3 rows)
-    function displayImagePage(loadedImages, currentSearchTags) {
-        const imagesToShow = imagesPerRow * ROWS_PER_PAGE;
-        const startIndex = currentPage * imagesToShow;
-        const endIndex = startIndex + imagesToShow;
-        const pageImages = loadedImages.slice(startIndex, endIndex);
+    // Create an image card (normal or greyscale indicator)
+    function createImageCard(image, index, imageSrc, currentSearchTags, isGreyscaleIndicator = false) {
+        const card = document.createElement('div');
+        card.className = 'preview-card library-card';
+        card.dataset.imageId = image.id;
+        
+        if (isGreyscaleIndicator) {
+            card.classList.add('greyscale-indicator');
+        }
 
-        pageImages.forEach(({ image, index, imageSrc }) => {
-            const card = document.createElement('div');
-            card.className = 'preview-card library-card';
-            card.dataset.imageId = image.id;
-
-            const img = document.createElement('img');
-            img.src = imageSrc;
-
-            // Add click event listener based on view mode
+        const img = document.createElement('img');
+        img.src = imageSrc;
+        
+        if (isGreyscaleIndicator) {
+            // Greyscale images are non-clickable visual indicators
+            img.style.filter = 'grayscale(100%)';
+            img.style.opacity = '0.6';
+            img.style.pointerEvents = 'none';
+            card.style.pointerEvents = 'none';
+            card.style.cursor = 'default';
+        } else {
+            // Normal images are clickable
             img.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 console.log('Image clicked:', image.id, 'isPoolView:', isPoolView, 'index:', index);
-
-                // In both library and pool view, allow selection toggling
                 toggleImageSelection(image.id, card);
             });
-
-            // Add cursor pointer style - always clickable in pool view
             img.style.cursor = 'pointer';
-
-            // Ensure card is also clickable in pool view
             if (isPoolView) {
                 card.style.cursor = 'pointer';
             }
+        }
 
-            card.appendChild(img);
+        card.appendChild(img);
+        
+        // Add "chosen" overlay text for greyscale indicators (after image so it appears on top)
+        if (isGreyscaleIndicator) {
+            const chosenOverlay = document.createElement('div');
+            chosenOverlay.className = 'chosen-overlay';
+            chosenOverlay.textContent = 'chosen';
+            card.appendChild(chosenOverlay);
+        }
 
-            // Add hover tooltip for width/length dimensions
-            if (image.width || image.length) {
-                const dimensionTooltip = document.createElement('div');
-                dimensionTooltip.className = 'dimension-tooltip';
-                const widthText = image.width ? `Width: ${image.width}` : '';
-                const lengthText = image.length ? `Length: ${image.length}` : '';
-                const separator = (widthText && lengthText) ? ' | ' : '';
-                dimensionTooltip.textContent = widthText + separator + lengthText;
-                card.appendChild(dimensionTooltip);
-            }
+        // Add hover tooltip for width/length dimensions
+        if (image.width || image.length) {
+            const dimensionTooltip = document.createElement('div');
+            dimensionTooltip.className = 'dimension-tooltip';
+            const widthText = image.width ? `Width: ${image.width}` : '';
+            const lengthText = image.length ? `Length: ${image.length}` : '';
+            const separator = (widthText && lengthText) ? ' | ' : '';
+            dimensionTooltip.textContent = widthText + separator + lengthText;
+            card.appendChild(dimensionTooltip);
+        }
 
-            // Add eye icon for image preview (both library view and pool view)
+        // Add eye icon for image preview (only for non-greyscale images)
+        if (!isGreyscaleIndicator) {
             const eyeIcon = document.createElement('div');
             eyeIcon.className = 'image-preview-eye';
             eyeIcon.textContent = '1:1';
@@ -1061,79 +1071,78 @@
                 e.preventDefault();
                 e.stopPropagation();
 
-                // Check if we're in Selection Pool view (by title or isPoolView flag)
                 const libraryTitle = document.querySelector('#page-library .title');
                 const isSelectionPoolView = isPoolView || (libraryTitle && libraryTitle.textContent.includes('Selection Pool'));
 
                 console.log('Lens clicked - isPoolView:', isPoolView, 'isSelectionPoolView:', isSelectionPoolView);
 
                 if (isSelectionPoolView) {
-                    // Selection Pool preview with navigation
                     console.log('Opening Selection Pool preview for image:', image.id, 'at index:', index);
                     showSelectionPoolPreview(image, allImagesToDisplay, index);
                 } else {
-                    // Regular library preview
                     console.log('Opening regular library preview for image:', image.id);
                     showImagePreviewOverlay(imageSrc, image);
                 }
             });
 
             card.appendChild(eyeIcon);
+        }
 
-            // Add booklet icon for lightbox preview (only in Selection Pool view)
-            if (isPoolView) {
-                const bookletIcon = document.createElement('div');
-                bookletIcon.className = 'image-preview-booklet';
-                bookletIcon.textContent = '📖';
-                bookletIcon.title = 'Open lightbox with navigation';
+        // Add booklet icon for lightbox preview (only in Selection Pool view and non-greyscale)
+        if (isPoolView && !isGreyscaleIndicator) {
+            const bookletIcon = document.createElement('div');
+            bookletIcon.className = 'image-preview-booklet';
+            bookletIcon.textContent = '📖';
+            bookletIcon.title = 'Open lightbox with navigation';
 
-                bookletIcon.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('Booklet clicked, opening lightbox for index:', index);
-                    openLibraryLightbox(index);
-                });
+            bookletIcon.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Booklet clicked, opening lightbox for index:', index);
+                openLibraryLightbox(index);
+            });
 
-                card.appendChild(bookletIcon);
-            }
+            card.appendChild(bookletIcon);
+        }
 
-            // Add tag overlay - show only subjective tags (exclude objective metadata like width/length)
-            const matchingTags = getMatchingTags(image.tags || [], currentSearchTags);
-            const isTagSelected = tagSelectedImages.includes(image.id);
-            const allImageTags = image.tags || [];
-            
-            // Filter out objective metadata tags (width, length, book, page, row, column, type, material, remark, brand, color)
-            const objectivePrefixes = ['width:', 'length:', 'book:', 'page:', 'row:', 'column:', 'type:', 'material:', 'remark:', 'brand:', 'color:'];
-            const subjectiveTags = allImageTags.filter(tag => {
+        // Add tag overlay - show only subjective tags (exclude objective metadata like width/length)
+        const matchingTags = getMatchingTags(image.tags || [], currentSearchTags);
+        const isTagSelected = tagSelectedImages.includes(image.id);
+        const allImageTags = image.tags || [];
+        
+        // Filter out objective metadata tags (width, length, book, page, row, column, type, material, remark, brand, color)
+        const objectivePrefixes = ['width:', 'length:', 'book:', 'page:', 'row:', 'column:', 'type:', 'material:', 'remark:', 'brand:', 'color:'];
+        const subjectiveTags = allImageTags.filter(tag => {
+            const tagLower = tag.toLowerCase();
+            return !objectivePrefixes.some(prefix => tagLower.startsWith(prefix));
+        });
+
+        if (subjectiveTags.length > 0) {
+            const tagOverlay = document.createElement('div');
+            tagOverlay.className = 'tag-overlay';
+
+            // Check if any of the matching tags are subjective
+            const matchingSubjectiveTags = matchingTags.filter(tag => {
                 const tagLower = tag.toLowerCase();
                 return !objectivePrefixes.some(prefix => tagLower.startsWith(prefix));
             });
 
-            if (subjectiveTags.length > 0) {
-                const tagOverlay = document.createElement('div');
-                tagOverlay.className = 'tag-overlay';
-
-                // Check if any of the matching tags are subjective
-                const matchingSubjectiveTags = matchingTags.filter(tag => {
-                    const tagLower = tag.toLowerCase();
-                    return !objectivePrefixes.some(prefix => tagLower.startsWith(prefix));
-                });
-
-                // Always show all tags (or first 3 + count), but highlight if there are matches
-                if (matchingSubjectiveTags.length > 0) {
-                    tagOverlay.classList.add('has-matches');
-                }
-
-                // Show first 3 subjective tags
-                tagOverlay.textContent = subjectiveTags.slice(0, 3).join(', ');
-                if (subjectiveTags.length > 3) {
-                    tagOverlay.textContent += ` +${subjectiveTags.length - 3}`;
-                }
-
-                card.appendChild(tagOverlay);
+            // Always show all tags (or first 3 + count), but highlight if there are matches
+            if (matchingSubjectiveTags.length > 0) {
+                tagOverlay.classList.add('has-matches');
             }
 
-            // Handle selection state
+            // Show first 3 subjective tags
+            tagOverlay.textContent = subjectiveTags.slice(0, 3).join(', ');
+            if (subjectiveTags.length > 3) {
+                tagOverlay.textContent += ` +${subjectiveTags.length - 3}`;
+            }
+
+            card.appendChild(tagOverlay);
+        }
+
+        // Handle selection state (only for non-greyscale images)
+        if (!isGreyscaleIndicator) {
             const wasAlreadySelected = selectedImages.includes(image.id);
             const hasMatchingTags = currentSearchTags.length > 0 && matchingTags.length > 0;
 
@@ -1160,12 +1169,52 @@
                     selectedImages.push(image.id);
                 }
             }
+        }
 
+        return card;
+    }
+
+    // Display a page of images (3 rows)
+    function displayImagePage(loadedImages, currentSearchTags) {
+        const imagesToShow = imagesPerRow * ROWS_PER_PAGE;
+        const startIndex = currentPage * imagesToShow;
+        const endIndex = startIndex + imagesToShow;
+        const pageImages = loadedImages.slice(startIndex, endIndex);
+
+        // Check if we should show selected images at front (library view with selections, not pool view, first page only)
+        const allSelectedImageIds = [...new Set([...selectedImages, ...tagSelectedImages])];
+        const shouldShowSelectedAtFront = !isPoolView && allSelectedImageIds.length > 0 && currentPage === 0;
+        
+        if (shouldShowSelectedAtFront) {
+            // First, display selected images at the front (in color, clickable)
+            // Get selected images in their original order from loadedImages
+            const selectedImagesData = loadedImages.filter(({ image }) => allSelectedImageIds.includes(image.id));
+            selectedImagesData.forEach(({ image, index, imageSrc }) => {
+                const card = createImageCard(image, index, imageSrc, currentSearchTags, false);
+                libraryGrid.appendChild(card);
+            });
+        }
+
+        // Then display page images (selected ones will appear as greyscale indicators in their original positions)
+        pageImages.forEach(({ image, index, imageSrc }) => {
+            const isSelected = allSelectedImageIds.includes(image.id);
+            // Only show as greyscale if we're showing selected at front AND this image is selected
+            // AND we're on the first page (to avoid showing greyscale on later pages)
+            const isGreyscaleIndicator = shouldShowSelectedAtFront && isSelected;
+            
+            const card = createImageCard(image, index, imageSrc, currentSearchTags, isGreyscaleIndicator);
             libraryGrid.appendChild(card);
         });
 
+        // Calculate displayed count for button
+        let displayedCount = startIndex + pageImages.length;
+        if (shouldShowSelectedAtFront) {
+            // Add selected images count to displayed count
+            displayedCount += allSelectedImageIds.length;
+        }
+
         // Add or update "Load More" button
-        updateLoadMoreButton(loadedImages.length, startIndex + pageImages.length);
+        updateLoadMoreButton(loadedImages.length, displayedCount);
     }
 
     // Update or add "Load More" and "Load All" buttons
