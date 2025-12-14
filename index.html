@@ -1141,6 +1141,15 @@
             card.appendChild(tagOverlay);
         }
 
+        // Add creator email display (only for non-greyscale images)
+        if (!isGreyscaleIndicator && image.ownership) {
+            const creatorOverlay = document.createElement('div');
+            creatorOverlay.className = 'creator-overlay';
+            creatorOverlay.textContent = `👤 ${image.ownership}`;
+            creatorOverlay.title = `Created by: ${image.ownership}`;
+            card.appendChild(creatorOverlay);
+        }
+
         // Handle selection state (only for non-greyscale images)
         if (!isGreyscaleIndicator) {
             const wasAlreadySelected = selectedImages.includes(image.id);

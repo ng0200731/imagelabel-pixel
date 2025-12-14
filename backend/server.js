@@ -70,6 +70,20 @@ try {
     if (hasWidth && hasLength && hasOwnership) {
         console.log('✅ Database schema verified: width, length, and ownership columns exist');
     }
+    
+    // Verify projects table has ownership column
+    const projectsTableInfo = db.prepare("PRAGMA table_info(projects)").all();
+    const projectsHasOwnership = projectsTableInfo.some(col => col.name === 'ownership');
+    
+    if (!projectsHasOwnership) {
+        console.log('Adding ownership column to projects table...');
+        db.exec("ALTER TABLE projects ADD COLUMN ownership TEXT");
+        // Update existing projects to have ownership
+        const updateResult = db.prepare("UPDATE projects SET ownership = 'eric.brilliant@gmail.com' WHERE ownership IS NULL OR ownership = ''").run();
+        console.log(`✅ ownership column added to projects, updated ${updateResult.changes} existing projects`);
+    } else {
+        console.log('✅ Database schema verified: projects table has ownership column');
+    }
 } catch (err) {
     console.error('Error checking/updating database schema:', err);
 }

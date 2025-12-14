@@ -567,6 +567,26 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
+/* Creator email overlay for image cards */
+.creator-overlay {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  z-index: 5;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
 /* Ensure preview-grid in upload area has proper scrolling */
 #dropzone .preview-grid {
     flex: 1;
