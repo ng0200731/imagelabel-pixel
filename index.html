@@ -575,6 +575,13 @@
     // Application Version - Increment for each update
     const APP_VERSION = '1.1.0';
     
+    // Helper function to extract email prefix (part before "@")
+    function getEmailPrefix(email) {
+        if (!email) return '';
+        const atIndex = email.indexOf('@');
+        return atIndex > 0 ? email.substring(0, atIndex) : email;
+    }
+    
     // Update version display dynamically
     const versionElement = document.getElementById('app-version');
     if (versionElement) {
@@ -1193,7 +1200,8 @@
         if (!isGreyscaleIndicator && image.ownership) {
             const creatorOverlay = document.createElement('div');
             creatorOverlay.className = 'creator-overlay';
-            creatorOverlay.textContent = `👤 ${image.ownership}`;
+            const emailPrefix = getEmailPrefix(image.ownership);
+            creatorOverlay.textContent = `👤 ${emailPrefix}`;
             creatorOverlay.title = `Created by: ${image.ownership}`;
             card.appendChild(creatorOverlay);
         }
@@ -2942,7 +2950,8 @@
         projectDetailName.textContent = `📁 ${project.name}`;
         projectDetailDate.textContent = `📅 Created: ${new Date(project.created_at).toLocaleDateString()}`;
         if (project.ownership && projectDetailOwner) {
-            projectDetailOwner.textContent = `👤 Created by: ${project.ownership}`;
+            const emailPrefix = getEmailPrefix(project.ownership);
+            projectDetailOwner.textContent = `👤 Created by: ${emailPrefix}`;
             projectDetailOwner.style.display = 'inline';
         } else if (projectDetailOwner) {
             projectDetailOwner.style.display = 'none';
@@ -3748,7 +3757,8 @@
                 if (project.ownership) {
                     const ownerRow = document.createElement('div');
                     ownerRow.className = 'project-detail-row';
-                    ownerRow.innerHTML = `<strong>👤 Created by:</strong> ${project.ownership}`;
+                    const emailPrefix = getEmailPrefix(project.ownership);
+                    ownerRow.innerHTML = `<strong>👤 Created by:</strong> ${emailPrefix}`;
                     detailedInfo.appendChild(ownerRow);
                 }
 
@@ -3800,7 +3810,10 @@
 
                 const creatorEmail = document.createElement('span');
                 creatorEmail.className = 'project-creator-email';
-                creatorEmail.textContent = project.ownership ? `by ${project.ownership}` : '';
+                if (project.ownership) {
+                    const emailPrefix = getEmailPrefix(project.ownership);
+                    creatorEmail.textContent = `by ${emailPrefix}`;
+                }
 
                 projectMeta.appendChild(imageCount);
                 projectMeta.appendChild(createdDate);

@@ -94,6 +94,66 @@
       color: #999;
     }
     
+    .email-input-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    
+    .email-prefix {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .email-at {
+      font-size: 12px;
+      color: #000;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    
+    .email-domain {
+      flex: 1;
+      min-width: 120px;
+      cursor: pointer;
+    }
+    
+    .email-domain:focus {
+      outline: none;
+      border-color: #000;
+      background: #fff;
+      color: #000;
+    }
+    
+    .verification-code-container {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      width: 100%;
+    }
+    
+    .code-input-box {
+      width: 50px;
+      height: 50px;
+      text-align: center;
+      font-size: 20px;
+      font-weight: 600;
+      border: 1px solid #000;
+      background: #fff;
+      color: #000;
+      padding: 0;
+      font-family: inherit;
+    }
+    
+    .code-input-box:focus {
+      outline: none;
+      border-color: #000;
+      background: #fff;
+      color: #000;
+      border-width: 2px;
+    }
+    
     .login-button {
       appearance: none;
       background: #000 !important;
@@ -229,8 +289,15 @@
         <div class="step-indicator">Step 1: Enter your email address</div>
         <form id="email-form" class="login-form">
           <div class="form-group">
-            <label for="email-input" class="form-label">Email Address</label>
-            <input type="email" id="email-input" class="form-input" placeholder="Enter your email" required>
+            <label for="email-prefix-input" class="form-label">Email Address</label>
+            <div class="email-input-row">
+              <input type="text" id="email-prefix-input" class="form-input email-prefix" placeholder="username" required>
+              <span class="email-at">@</span>
+              <select id="email-domain-select" class="form-input email-domain" required>
+                <option value="longriverlabel.com">longriverlabel.com</option>
+                <option value="gmail.com">gmail.com</option>
+              </select>
+            </div>
           </div>
           <button type="submit" id="send-code-btn" class="login-button">📧 Send Verification Code</button>
         </form>
@@ -241,8 +308,15 @@
         <div class="step-indicator">Step 2: Enter verification code</div>
         <form id="code-form" class="login-form">
           <div class="form-group">
-            <label for="code-input" class="form-label">Verification Code</label>
-            <input type="text" id="code-input" class="form-input" placeholder="Enter 6-digit code" maxlength="6" required>
+            <label class="form-label">Verification Code</label>
+            <div class="verification-code-container">
+              <input type="text" id="code-input-0" class="code-input-box" maxlength="1" inputmode="numeric" pattern="[0-9]" required>
+              <input type="text" id="code-input-1" class="code-input-box" maxlength="1" inputmode="numeric" pattern="[0-9]" required>
+              <input type="text" id="code-input-2" class="code-input-box" maxlength="1" inputmode="numeric" pattern="[0-9]" required>
+              <input type="text" id="code-input-3" class="code-input-box" maxlength="1" inputmode="numeric" pattern="[0-9]" required>
+              <input type="text" id="code-input-4" class="code-input-box" maxlength="1" inputmode="numeric" pattern="[0-9]" required>
+              <input type="text" id="code-input-5" class="code-input-box" maxlength="1" inputmode="numeric" pattern="[0-9]" required>
+            </div>
           </div>
           <button type="submit" id="verify-code-btn" class="login-button">🔐 Verify & Login</button>
           <button type="button" id="back-to-email-btn" class="login-button secondary">← Back to Email</button>
@@ -260,13 +334,93 @@
     const codeStep = document.getElementById('code-step');
     const emailForm = document.getElementById('email-form');
     const codeForm = document.getElementById('code-form');
-    const emailInput = document.getElementById('email-input');
-    const codeInput = document.getElementById('code-input');
+    const emailPrefixInput = document.getElementById('email-prefix-input');
+    const emailDomainSelect = document.getElementById('email-domain-select');
+    const codeInputs = [
+      document.getElementById('code-input-0'),
+      document.getElementById('code-input-1'),
+      document.getElementById('code-input-2'),
+      document.getElementById('code-input-3'),
+      document.getElementById('code-input-4'),
+      document.getElementById('code-input-5')
+    ];
     const sendCodeBtn = document.getElementById('send-code-btn');
     const verifyCodeBtn = document.getElementById('verify-code-btn');
     const backToEmailBtn = document.getElementById('back-to-email-btn');
     
     let currentEmail = '';
+    
+    // Helper function to get full email
+    function getFullEmail() {
+      const prefix = emailPrefixInput.value.trim();
+      const domain = emailDomainSelect.value.trim();
+      if (prefix && domain) {
+        return `${prefix}@${domain}`;
+      }
+      return '';
+    }
+    
+    // Helper function to get verification code from all inputs
+    function getVerificationCode() {
+      return codeInputs.map(input => input.value.trim()).join('');
+    }
+    
+    // Helper function to set verification code (for paste)
+    function setVerificationCode(code) {
+      const digits = code.replace(/\D/g, '').slice(0, 6).split('');
+      codeInputs.forEach((input, index) => {
+        input.value = digits[index] || '';
+      });
+      // Focus the last filled input or the first empty one
+      const firstEmptyIndex = digits.length < 6 ? digits.length : 5;
+      codeInputs[firstEmptyIndex].focus();
+    }
+    
+    // Setup verification code input handlers
+    codeInputs.forEach((input, index) => {
+      // Handle input
+      input.addEventListener('input', (e) => {
+        const value = e.target.value.replace(/\D/g, ''); // Only allow digits
+        if (value.length > 1) {
+          // If multiple characters pasted, handle it
+          const remaining = value.slice(1);
+          setVerificationCode(value + remaining);
+          return;
+        }
+        e.target.value = value;
+        
+        // Auto-advance to next box
+        if (value && index < codeInputs.length - 1) {
+          codeInputs[index + 1].focus();
+        }
+        
+        // Auto-submit when all boxes are filled
+        if (getVerificationCode().length === 6) {
+          codeForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      });
+      
+      // Handle keydown for backspace
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !e.target.value && index > 0) {
+          // Move to previous box and clear it
+          codeInputs[index - 1].focus();
+          codeInputs[index - 1].value = '';
+        }
+      });
+      
+      // Handle paste
+      input.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const pastedData = (e.clipboardData || window.clipboardData).getData('text');
+        setVerificationCode(pastedData);
+      });
+      
+      // Handle focus - select all text when focused
+      input.addEventListener('focus', (e) => {
+        e.target.select();
+      });
+    });
     
     // Show status message
     function showStatus(message, type = 'info') {
@@ -284,14 +438,17 @@
     function showCodeStep() {
       emailStep.classList.add('hidden');
       codeStep.classList.remove('hidden');
-      codeInput.focus();
+      // Clear all code inputs
+      codeInputs.forEach(input => input.value = '');
+      // Focus first input
+      codeInputs[0].focus();
     }
     
     // Switch back to email step
     function showEmailStep() {
       codeStep.classList.add('hidden');
       emailStep.classList.remove('hidden');
-      emailInput.focus();
+      emailPrefixInput.focus();
     }
     
     // Set button loading state
@@ -312,7 +469,7 @@
     emailForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const email = emailInput.value.trim();
+      const email = getFullEmail();
       if (!email) {
         showStatus('Please enter a valid email address', 'error');
         return;
@@ -353,9 +510,10 @@
     codeForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const code = codeInput.value.trim();
+      const code = getVerificationCode();
       if (!code || code.length !== 6) {
         showStatus('❌ Please enter a 6-digit verification code', 'error');
+        codeInputs[0].focus();
         return;
       }
 
@@ -384,8 +542,9 @@
           }, 2000);
         } else {
           showStatus(`❌ ${result.error || 'Invalid verification code'}`, 'error');
-          codeInput.value = '';
-          codeInput.focus();
+          // Clear all inputs
+          codeInputs.forEach(input => input.value = '');
+          codeInputs[0].focus();
         }
       } catch (error) {
         console.error('Code verification error:', error);
@@ -399,7 +558,8 @@
     backToEmailBtn.addEventListener('click', () => {
       showEmailStep();
       hideStatus();
-      codeInput.value = '';
+      // Clear all code inputs
+      codeInputs.forEach(input => input.value = '');
     });
     
     // Check if already logged in
@@ -420,7 +580,7 @@
         }
       }
       
-      emailInput.focus();
+      emailPrefixInput.focus();
     });
   </script>
 </body>
