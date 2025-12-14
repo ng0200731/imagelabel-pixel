@@ -3856,8 +3856,17 @@
             }
         });
 
+        const sortedTags = Array.from(originalTags).sort();
+        const tagCount = sortedTags.length;
+
+        // Update modal header with tag count
+        const updateTagHeader = document.querySelector('#update-tag-modal h2');
+        if (updateTagHeader) {
+            updateTagHeader.textContent = `Update Tags {#${tagCount}}`;
+        }
+
         // Populate original tags list with X buttons based on selection count
-        populateOriginalTagsList(Array.from(originalTags).sort());
+        populateOriginalTagsList(sortedTags);
 
         // Clear new tags list and input
         newTagsList.innerHTML = '';
@@ -3866,6 +3875,19 @@
 
         // Show modal
         updateTagModal.classList.remove('is-hidden');
+    }
+
+    function updateTagCount() {
+        // Count all tags: original tags (not marked for removal) + new tags
+        const originalTagElements = originalTagsList.querySelectorAll('.tag-item-removable:not(.marked-for-removal)');
+        const newTagElements = newTagsList.querySelectorAll('.tag-item');
+        const totalCount = originalTagElements.length + newTagElements.length;
+        
+        // Update modal header with tag count
+        const updateTagHeader = document.querySelector('#update-tag-modal h2');
+        if (updateTagHeader) {
+            updateTagHeader.textContent = `Update Tags {#${totalCount}}`;
+        }
     }
 
     function populateOriginalTagsList(tags) {
@@ -3894,6 +3916,9 @@
 
             originalTagsList.appendChild(tagElement);
         });
+        
+        // Update tag count after populating
+        updateTagCount();
     }
 
     function getCommonTagsFromSelectedImages() {
@@ -3958,6 +3983,9 @@
             tagsToRemove.add(tag);
             tagElement.classList.add('marked-for-removal');
         }
+        
+        // Update tag count after removal state change
+        updateTagCount();
     }
 
     function removeAllTagsFromSelected() {
@@ -3988,6 +4016,9 @@
                 element.classList.remove('marked-for-removal');
             });
         }
+        
+        // Update tag count after remove all/undo
+        updateTagCount();
     }
 
     function addNewTags() {
@@ -4030,12 +4061,14 @@
 
         // Clear input
         newTagInput.value = '';
+        updateTagCount(); // Update count after adding new tags
     }
 
     function removeNewTag(tag, tagElement) {
         console.log('Removing new tag:', tag);
         tagsToAdd.delete(tag);
         tagElement.remove();
+        updateTagCount(); // Update count when tag is removed
     }
 
     function showTagUpdateSuccess() {
