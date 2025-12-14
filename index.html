@@ -1266,6 +1266,17 @@
 
                 card.appendChild(img);
 
+                // Add hover tooltip for width/length dimensions
+                if (image.width || image.length) {
+                    const dimensionTooltip = document.createElement('div');
+                    dimensionTooltip.className = 'dimension-tooltip';
+                    const widthText = image.width ? `Width: ${image.width}` : '';
+                    const lengthText = image.length ? `Length: ${image.length}` : '';
+                    const separator = (widthText && lengthText) ? ' | ' : '';
+                    dimensionTooltip.textContent = widthText + separator + lengthText;
+                    card.appendChild(dimensionTooltip);
+                }
+
                 // Add eye icon for image preview (both library view and pool view)
                 const eyeIcon = document.createElement('div');
                 eyeIcon.className = 'image-preview-eye';
@@ -4373,6 +4384,18 @@
     [objBookInput, objPageInput, objRowInput, objColumnInput, objTypeInput, objMaterialInput, objWidthInput, objLengthInput, objRemarkInput, objBrandInput, objColorInput].forEach(input => {
         if (input) {
             input.addEventListener('keydown', (e) => {
+                // Special handling for width and length inputs - Tab should move focus without clearing
+                if ((input === objWidthInput || input === objLengthInput) && e.key === 'Tab') {
+                    // Allow Tab to work normally (move to next field) without clearing input
+                    // Only commit if Enter or comma is pressed
+                    if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        handleObjCommit(input);
+                    }
+                    // Tab key will work normally (no preventDefault)
+                    return;
+                }
+                
                 if (e.key === 'Enter' || e.key === 'Tab' || e.key === ',') {
                     e.preventDefault();
                     handleObjCommit(input);
@@ -4474,6 +4497,27 @@
     uploadButton.addEventListener('click', async () => {
         const subjTags = Array.from(subjChips.querySelectorAll('.chip')).map(chip => chip.textContent.replace(/[×x]$/, '').trim());
         const objTags = Array.from(objChips.querySelectorAll('.chip')).map(chip => chip.textContent.replace(/[×x]$/, '').trim());
+        
+        // Get width/length values from input fields
+        const widthValue = objWidthInput ? objWidthInput.value.trim() : '';
+        const lengthValue = objLengthInput ? objLengthInput.value.trim() : '';
+        
+        // Check if width/length are already in chips
+        const hasWidthInChips = objTags.some(tag => tag.toLowerCase().startsWith('width:'));
+        const hasLengthInChips = objTags.some(tag => tag.toLowerCase().startsWith('length:'));
+        
+        // Add width/length from input fields if they exist and aren't already in chips
+        if (widthValue && !hasWidthInChips) {
+            // Ensure format is "width:value" - add prefix if missing
+            const widthTag = widthValue.toLowerCase().startsWith('width:') ? widthValue : `width:${widthValue}`;
+            objTags.push(widthTag);
+        }
+        if (lengthValue && !hasLengthInChips) {
+            // Ensure format is "length:value" - add prefix if missing
+            const lengthTag = lengthValue.toLowerCase().startsWith('length:') ? lengthValue : `length:${lengthValue}`;
+            objTags.push(lengthTag);
+        }
+        
         const allTags = [...subjTags, ...objTags];
 
         if (filesToUpload.length === 0) {
@@ -4481,11 +4525,6 @@
         }
 
         // Validate that at least one dimension field (width or length) is filled
-        const widthValue = objWidthInput ? objWidthInput.value.trim() : '';
-        const lengthValue = objLengthInput ? objLengthInput.value.trim() : '';
-        const hasWidthInChips = objTags.some(tag => tag.toLowerCase().startsWith('width:'));
-        const hasLengthInChips = objTags.some(tag => tag.toLowerCase().startsWith('length:'));
-        
         if (!widthValue && !lengthValue && !hasWidthInChips && !hasLengthInChips) {
             alert('Please fill in at least one dimension field (width or length) before uploading.');
             // Focus on width input
