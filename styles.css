@@ -2544,8 +2544,8 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
 
 /* Update Tag Modal */
 .update-tag-modal-content {
-  width: 33.33vw !important; /* 1/3 of screen width */
-  height: 50vh !important; /* 1/2 of screen height */
+  width: 50vw !important; /* 50% of screen width (increased from 33.33vw by 50%) */
+  height: 75vh !important; /* 75% of screen height (increased from 50vh by 50%) */
   max-width: none !important;
   max-height: none !important;
   position: fixed !important;
