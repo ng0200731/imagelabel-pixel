@@ -723,7 +723,12 @@
     // Update page title
     document.title = `Image Library — Minimal Shell v${APP_VERSION}`;
 
-    const API_URL = 'http://localhost:3000';
+    // Backend API base URL
+    // If frontend is served on :8080 (static server), point API to :3000 on same host.
+    // Otherwise use current origin.
+    const API_URL = (window.location.origin.includes(':8080'))
+        ? window.location.origin.replace(':8080', ':3000')
+        : window.location.origin;
     const navLinks = {
         library: document.getElementById('nav-library'),
         upload: document.getElementById('nav-upload'),
