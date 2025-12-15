@@ -1403,14 +1403,14 @@
             });
         }
 
-        // Then display page images (selected ones will appear as greyscale indicators in their original positions)
+        // Then display page images (skip images already shown at the front to avoid "chosen" duplicates)
         pageImages.forEach(({ image, index, imageSrc }) => {
             const isSelected = allSelectedImageIds.includes(image.id);
-            // Only show as greyscale if we're showing selected at front AND this image is selected
-            // AND we're on the first page (to avoid showing greyscale on later pages)
-            const isGreyscaleIndicator = shouldShowSelectedAtFront && isSelected;
-            
-            const card = createImageCard(image, index, imageSrc, currentSearchTags, isGreyscaleIndicator);
+            // If we've already shown selected images at the front, skip them here
+            if (shouldShowSelectedAtFront && isSelected) {
+                return;
+            }
+            const card = createImageCard(image, index, imageSrc, currentSearchTags, false);
             libraryGrid.appendChild(card);
         });
 
