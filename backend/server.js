@@ -442,6 +442,51 @@ app.get('/tags', (req, res) => {
     }
 });
 
+// 3b. Tag frequencies (subjective/objective combined) with level-based scope
+// Level 3: aggregate across all users; other levels: only their own images
+app.get('/tag-frequencies', (req, res) => {
+    try {
+        const user = getUserFromSession(req);
+        if (!user) {
+            return res.status(401).send('Authentication required');
+        }
+
+        const userLevel = parseInt(user.level) || 1;
+        let rows;
+
+        if (userLevel === 3) {
+            rows = db.prepare(`
+                SELECT t.name AS name, COUNT(*) AS count
+                FROM image_tags it
+                JOIN tags t ON t.id = it.tag_id
+                JOIN images i ON i.id = it.image_id
+                GROUP BY t.id, t.name
+                ORDER BY count DESC, t.name ASC
+            `).all();
+        } else {
+            rows = db.prepare(`
+                SELECT t.name AS name, COUNT(*) AS count
+                FROM image_tags it
+                JOIN tags t ON t.id = it.tag_id
+                JOIN images i ON i.id = it.image_id
+                WHERE i.ownership = ?
+                GROUP BY t.id, t.name
+                ORDER BY count DESC, t.name ASC
+            `).all(user.email);
+        }
+
+        const result = rows.map(r => ({
+            name: r.name,
+            count: Number(r.count) || 0
+        }));
+
+        res.json(result);
+    } catch (err) {
+        console.error('Error fetching tag frequencies:', err.message);
+        res.status(500).send('Error fetching tag frequencies');
+    }
+});
+
 // 4. Update Image Tags
 app.put('/images/:id/tags', (req, res) => {
     const imageId = parseInt(req.params.id);

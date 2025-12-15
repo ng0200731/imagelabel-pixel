@@ -200,13 +200,20 @@
                 <div class="tag-panel__header is-subjective" style="display: none;">SUBJECTIVE (FEELINGS)</div>
                 <div class="tag-panel__body" style="padding-top: 8px;">
                   <div class="subj-inline">
+                    <!-- LEFT: original input + hint + chips (acts as one block) -->
                     <div>
                       <label class="tag-input">Add feelings:
                         <input id="subj-input" type="text" placeholder="type and press Enter/Tab" />
                       </label>
                       <div class="hint">Press Enter or Tab to add; Backspace removes last when empty</div>
+                      <!-- Chips stay visually stuck to the input; do not affect right column height -->
+                      <div id="subj-chips" class="chips"></div>
                     </div>
-                    <div id="subj-chips" class="chips"></div>
+                    <!-- RIGHT: frequently used feelings (separate block, own height) -->
+                    <div>
+                      <div class="subj-freq-header">Frequently used</div>
+                      <div id="subj-freq-list" class="subj-freq-list"></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -385,10 +392,70 @@
         <div class="image-preview-content">
           <img id="preview-overlay-img" src="" alt="Full Size Preview">
           <button id="preview-overlay-close" class="image-preview-close">✕</button>
+          <button id="preview-overlay-settings" class="image-preview-settings hidden">⚙️</button>
+          <div id="preview-dimension-info" class="preview-dimension-info hidden"></div>
         </div>
         <!-- Navigation arrows for Selection Pool -->
         <button id="preview-nav-left" class="image-preview-nav-arrow nav-left hidden">◀</button>
         <button id="preview-nav-right" class="image-preview-nav-arrow nav-right hidden">▶</button>
+      </div>
+
+      <!-- Settings Modal within Overlay -->
+      <div id="real-size-settings-modal" class="real-size-settings-modal is-hidden">
+        <div class="real-size-settings-content">
+          <div class="real-size-settings-header">
+            <h3>Real Size Display Settings</h3>
+            <button id="close-settings-modal" class="settings-close-btn">✕</button>
+          </div>
+          <div class="real-size-settings-body">
+            <div class="settings-section">
+              <label>Detected DPI:</label>
+              <div id="detected-dpi-display" class="dpi-display"></div>
+            </div>
+            <div class="settings-section">
+              <label for="manual-dpi-input">Manual DPI Override:</label>
+              <input type="number" id="manual-dpi-input" placeholder="Auto-detect" min="72" max="300" step="1">
+              <button id="apply-manual-dpi" class="settings-btn">Apply</button>
+              <button id="reset-manual-dpi" class="settings-btn secondary">Reset</button>
+            </div>
+            <div class="settings-section">
+              <button id="open-calibration-tool" class="settings-btn primary">Open Calibration Tool</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Calibration Tool Modal -->
+      <div id="calibration-tool-modal" class="calibration-tool-modal is-hidden">
+        <div class="calibration-tool-content">
+          <div class="calibration-tool-header">
+            <h3>DPI Calibration Tool</h3>
+            <button id="close-calibration-modal" class="calibration-close-btn">✕</button>
+          </div>
+          <div class="calibration-tool-body">
+            <div class="calibration-instructions">
+              <p><strong>Instructions:</strong></p>
+              <ol>
+                <li>Place a credit card (85.6mm × 53.98mm) or a known-size object on your screen</li>
+                <li>Adjust the DPI slider until the displayed size matches the real object</li>
+                <li>Click "Save Calibrated DPI" to apply</li>
+              </ol>
+            </div>
+            <div class="calibration-preview">
+              <div class="calibration-object" id="calibration-object">
+                <div class="calibration-label">Credit Card<br>85.6mm × 53.98mm</div>
+              </div>
+            </div>
+            <div class="calibration-controls">
+              <label for="calibration-dpi-slider">DPI: <span id="calibration-dpi-value">96</span></label>
+              <input type="range" id="calibration-dpi-slider" min="72" max="300" value="96" step="1">
+              <div class="calibration-buttons">
+                <button id="save-calibrated-dpi" class="settings-btn primary">Save Calibrated DPI</button>
+                <button id="cancel-calibration" class="settings-btn secondary">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Project Detail Overlay Modal -->
@@ -581,6 +648,60 @@
         const atIndex = email.indexOf('@');
         return atIndex > 0 ? email.substring(0, atIndex) : email;
     }
+
+    // --- DPI Detection & Real Size Display ---
+    let detectedDPI = null;
+    let manualDPI = null;
+    let calibratedDPI = null;
+
+    // Auto-detect DPI
+    function detectDPI() {
+        // Try to get DPI from localStorage first (calibrated or manual)
+        const savedDPI = localStorage.getItem('calibratedDPI') || localStorage.getItem('manualDPI');
+        if (savedDPI) {
+            return parseFloat(savedDPI);
+        }
+
+        // Auto-detect using screen dimensions
+        // Formula: DPI = (screen width in pixels) / (screen width in inches)
+        // We'll use a standard approach: window.devicePixelRatio * 96
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        const baseDPI = 96;
+        const calculatedDPI = devicePixelRatio * baseDPI;
+
+        // Store detected DPI
+        detectedDPI = calculatedDPI;
+        return calculatedDPI;
+    }
+
+    // Get current DPI (prioritizes calibrated > manual > detected)
+    function getCurrentDPI() {
+        if (calibratedDPI) return calibratedDPI;
+        if (manualDPI) return manualDPI;
+        if (detectedDPI) return detectedDPI;
+        return detectDPI();
+    }
+
+    // Convert mm to pixels based on DPI
+    function mmToPixels(mm, dpi = null) {
+        if (!mm || isNaN(mm)) return null;
+        const currentDPI = dpi || getCurrentDPI();
+        // 1 inch = 25.4mm, so pixels = (mm * DPI) / 25.4
+        return (parseFloat(mm) * currentDPI) / 25.4;
+    }
+
+    // Load saved DPI values from localStorage
+    const savedCalibratedDPI = localStorage.getItem('calibratedDPI');
+    const savedManualDPI = localStorage.getItem('manualDPI');
+    if (savedCalibratedDPI) {
+        calibratedDPI = parseFloat(savedCalibratedDPI);
+    }
+    if (savedManualDPI) {
+        manualDPI = parseFloat(savedManualDPI);
+    }
+
+    // Initialize DPI on page load
+    detectedDPI = detectDPI();
     
     // Update version display dynamically
     const versionElement = document.getElementById('app-version');
@@ -651,6 +772,10 @@
     const dropzone = document.getElementById('dropzone');
     const subjInput = document.getElementById('subj-input');
     const subjChips = document.getElementById('subj-chips');
+    const subjFreqList = document.getElementById('subj-freq-list');
+
+    // Track frequency of subjective (feeling) tags in-memory
+    const subjFreqMap = {};
 
     // Objective metadata inputs
     const objBookInput = document.getElementById('obj-book');
@@ -1115,8 +1240,9 @@
             card.appendChild(dimensionTooltip);
         }
 
-        // Add eye icon for image preview (only for non-greyscale images)
+        // Add eye icon and ruler icon for image preview (only for non-greyscale images)
         if (!isGreyscaleIndicator) {
+            // 1:1 icon (original pixel size)
             const eyeIcon = document.createElement('div');
             eyeIcon.className = 'image-preview-eye';
             eyeIcon.textContent = '1:1';
@@ -1141,6 +1267,23 @@
             });
 
             card.appendChild(eyeIcon);
+
+            // Ruler icon (real size based on mm dimensions)
+            if (image.width || image.length) {
+                const rulerIcon = document.createElement('div');
+                rulerIcon.className = 'image-preview-ruler';
+                rulerIcon.innerHTML = '📏';
+                rulerIcon.title = 'Preview real size (1:1 based on dimensions)';
+
+                rulerIcon.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Ruler clicked - showing real size for image:', image.id);
+                    showRealSizeOverlay(imageSrc, image);
+                });
+
+                card.appendChild(rulerIcon);
+            }
         }
 
         // Add booklet icon for lightbox preview (only in Selection Pool view and non-greyscale)
@@ -1419,6 +1562,23 @@
             });
 
             card.appendChild(eyeIcon);
+
+            // Ruler icon (real size based on mm dimensions)
+            if (image.width || image.length) {
+                const rulerIcon = document.createElement('div');
+                rulerIcon.className = 'image-preview-ruler';
+                rulerIcon.innerHTML = '📏';
+                rulerIcon.title = 'Preview real size (1:1 based on dimensions)';
+
+                rulerIcon.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Ruler clicked - showing real size for image:', image.id);
+                    showRealSizeOverlay(imageSrc, image);
+                });
+
+                card.appendChild(rulerIcon);
+            }
 
             if (isPoolView) {
                 const bookletIcon = document.createElement('div');
@@ -1950,6 +2110,8 @@
             displayProjects();
         } else if (pageName === 'admin') {
             loadAdminUsers();
+        } else if (pageName === 'upload') {
+            fetchSubjFrequencies();
         }
     }
 
@@ -1983,7 +2145,7 @@
                     card.remove();
                 });
 
-                // Add 1:1 icon for full-size preview
+                // Add 1:1 icon and ruler icon for full-size preview
                 const previewIcon = document.createElement('div');
                 previewIcon.className = 'image-preview-eye';
                 previewIcon.textContent = '1:1';
@@ -1996,12 +2158,101 @@
                     showImagePreviewOverlay(imageSrc, null);
                 });
 
+                // Ruler icon for real size (only if dimensions are available)
+                const objWidth = document.getElementById('obj-width').value;
+                const objLength = document.getElementById('obj-length').value;
+                const rulerIcon = document.createElement('div');
+                rulerIcon.className = 'image-preview-ruler';
+                rulerIcon.innerHTML = '📏';
+                rulerIcon.title = 'Preview real size (1:1 based on dimensions)';
+                
+                if (objWidth || objLength) {
+                    rulerIcon.addEventListener('click', (evt) => {
+                        evt.preventDefault();
+                        evt.stopPropagation();
+                        // Show image in overlay at real size
+                        const tempImage = {
+                            width: objWidth || null,
+                            length: objLength || null
+                        };
+                        showRealSizeOverlay(imageSrc, tempImage);
+                    });
+                } else {
+                    rulerIcon.style.opacity = '0.5';
+                    rulerIcon.style.cursor = 'not-allowed';
+                    rulerIcon.title = 'Add width or length to enable real size preview';
+                }
+
                 card.appendChild(del);
                 card.appendChild(img);
                 card.appendChild(previewIcon);
+                card.appendChild(rulerIcon);
                 previewGrid.appendChild(card);
             };
             reader.readAsDataURL(file);
+        }
+    }
+
+    function updateSubjFreqList() {
+        if (!subjFreqList) return;
+        // Convert map to array and sort by count desc, then label asc
+        const items = Object.entries(subjFreqMap)
+            .map(([label, count]) => ({ label, count }))
+            .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+
+        subjFreqList.innerHTML = '';
+        items.forEach(({ label, count }) => {
+            const row = document.createElement('div');
+            row.className = 'subj-freq-item';
+            row.dataset.label = label;
+
+            const spanLabel = document.createElement('span');
+            spanLabel.className = 'subj-freq-item__label';
+            spanLabel.textContent = label;
+
+            const spanCount = document.createElement('span');
+            spanCount.className = 'subj-freq-item__count';
+            spanCount.textContent = `×${count}`;
+
+            row.appendChild(spanLabel);
+            row.appendChild(spanCount);
+
+            // Clicking a frequent item adds it again to chips
+            row.addEventListener('click', () => {
+                addSubjChip(label);
+            });
+
+            subjFreqList.appendChild(row);
+        });
+    }
+
+    async function fetchSubjFrequencies() {
+        try {
+            const sessionToken = localStorage.getItem('sessionToken');
+            const headers = {};
+            if (sessionToken) {
+                headers['Authorization'] = `Bearer ${sessionToken}`;
+            }
+
+            const response = await fetch(`${API_URL}/tag-frequencies`, { headers });
+            if (!response.ok) {
+                throw new Error(`Failed to fetch tag frequencies: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            // Reset and populate the in-memory map
+            Object.keys(subjFreqMap).forEach(k => delete subjFreqMap[k]);
+            data.forEach(item => {
+                if (!item || !item.name) return;
+                const label = String(item.name).toLowerCase();
+                const count = Number(item.count) || 0;
+                subjFreqMap[label] = count;
+            });
+
+            updateSubjFreqList();
+        } catch (err) {
+            console.error('Error fetching tag frequencies:', err);
         }
     }
 
@@ -2021,6 +2272,10 @@
         x.addEventListener('click', (ev) => { ev.stopPropagation(); chip.remove(); });
         chip.appendChild(x);
         subjChips.appendChild(chip);
+
+        // Update frequency map and list (most-used at the top)
+        subjFreqMap[text] = (subjFreqMap[text] || 0) + 1;
+        updateSubjFreqList();
     }
 
     function handleSubjCommit() {
@@ -3294,6 +3549,118 @@
         // Hide navigation arrows
         previewNavLeft.classList.add('hidden');
         previewNavRight.classList.add('hidden');
+
+        // Hide real-size specific elements
+        document.getElementById('preview-overlay-settings').classList.add('hidden');
+        document.getElementById('preview-dimension-info').classList.add('hidden');
+        previewOverlayImg.style.width = '';
+        previewOverlayImg.style.height = '';
+        previewOverlayImg.style.maxWidth = '';
+        previewOverlayImg.style.maxHeight = '';
+    }
+
+    // Show real-size overlay (strict 1:1 based on mm dimensions)
+    function showRealSizeOverlay(imageSrc, image) {
+        if (!image || (!image.width && !image.length)) {
+            console.warn('Cannot show real size: no dimensions available');
+            return;
+        }
+
+        const widthMm = parseFloat(image.width);
+        const lengthMm = parseFloat(image.length);
+        const currentDPI = getCurrentDPI();
+
+        // Calculate pixel dimensions
+        const widthPx = widthMm ? mmToPixels(widthMm, currentDPI) : null;
+        const lengthPx = lengthMm ? mmToPixels(lengthMm, currentDPI) : null;
+
+        // Set image source
+        previewOverlayImg.src = imageSrc;
+        previewOverlayImg.alt = image.id ? `Real size preview of image ${image.id}` : 'Real size preview';
+
+        // Set strict dimensions (no zoom, no scaling)
+        if (widthPx && lengthPx) {
+            // Use the larger dimension to determine orientation
+            if (widthPx > lengthPx) {
+                previewOverlayImg.style.width = `${widthPx}px`;
+                previewOverlayImg.style.height = `${lengthPx}px`;
+            } else {
+                previewOverlayImg.style.width = `${widthPx}px`;
+                previewOverlayImg.style.height = `${lengthPx}px`;
+            }
+            previewOverlayImg.style.maxWidth = `${widthPx}px`;
+            previewOverlayImg.style.maxHeight = `${lengthPx}px`;
+        } else if (widthPx) {
+            previewOverlayImg.style.width = `${widthPx}px`;
+            previewOverlayImg.style.height = 'auto';
+            previewOverlayImg.style.maxWidth = `${widthPx}px`;
+            previewOverlayImg.style.maxHeight = 'none';
+        } else if (lengthPx) {
+            previewOverlayImg.style.width = 'auto';
+            previewOverlayImg.style.height = `${lengthPx}px`;
+            previewOverlayImg.style.maxWidth = 'none';
+            previewOverlayImg.style.maxHeight = `${lengthPx}px`;
+        }
+
+        // Show overlay first
+        imagePreviewOverlay.classList.add('show');
+
+        // Center the image after it loads
+        const centerImage = () => {
+            const overlay = imagePreviewOverlay;
+            const content = document.querySelector('.image-preview-content');
+            if (content && previewOverlayImg.complete) {
+                // Calculate center position for scrolling
+                const scrollLeft = Math.max(0, (content.scrollWidth - overlay.clientWidth) / 2);
+                const scrollTop = Math.max(0, (content.scrollHeight - overlay.clientHeight) / 2);
+                overlay.scrollLeft = scrollLeft;
+                overlay.scrollTop = scrollTop;
+            }
+        };
+
+        // Center immediately if image already loaded, otherwise wait for load
+        if (previewOverlayImg.complete) {
+            setTimeout(centerImage, 50);
+        } else {
+            previewOverlayImg.onload = () => {
+                setTimeout(centerImage, 50);
+            };
+        }
+
+        // Hide navigation arrows
+        previewNavLeft.classList.add('hidden');
+        previewNavRight.classList.add('hidden');
+
+        // Show settings button and dimension info
+        const settingsBtn = document.getElementById('preview-overlay-settings');
+        const dimensionInfo = document.getElementById('preview-dimension-info');
+        
+        settingsBtn.classList.remove('hidden');
+        dimensionInfo.classList.remove('hidden');
+
+        // Update dimension info
+        const dimensionText = [];
+        if (widthMm) dimensionText.push(`Width: ${widthMm}mm`);
+        if (lengthMm) dimensionText.push(`Length: ${lengthMm}mm`);
+        dimensionText.push(`(Real Size)`);
+        dimensionInfo.innerHTML = `
+            <div class="dimension-text">${dimensionText.join(' × ')}</div>
+            <div class="dpi-text">Detected DPI: ${currentDPI.toFixed(1)}</div>
+        `;
+
+        // Prevent body scrolling
+        document.body.style.overflow = 'hidden';
+
+        // Add pan event listeners
+        addPanEventListeners();
+
+        console.log('Real size overlay opened:', {
+            widthMm,
+            lengthMm,
+            widthPx,
+            lengthPx,
+            dpi: currentDPI
+        });
     }
 
     // Pan functionality variables
@@ -5000,10 +5367,6 @@
         if (e.key === 'Enter' || e.key === 'Tab' || e.key === ',') {
             e.preventDefault();
             handleSubjCommit();
-        } else if (e.key === 'Backspace' && subjInput.value === '') {
-            const chips = subjChips.querySelectorAll('.chip');
-            const last = chips[chips.length - 1];
-            if (last) subjChips.removeChild(last);
         }
     });
 
@@ -5308,6 +5671,9 @@
             // Reload images to show the newly uploaded ones
             await displayLibraryImages();
 
+            // Refresh frequency list based on newly saved tags
+            await fetchSubjFrequencies();
+
             // On success, show the custom confirmation dialog
             confirmModal.classList.remove('is-hidden');
 
@@ -5534,6 +5900,157 @@
 
     // Image preview overlay event listeners
     previewOverlayClose.addEventListener('click', hideImagePreviewOverlay);
+
+    // Real-size display settings and calibration
+    const previewOverlaySettings = document.getElementById('preview-overlay-settings');
+    const realSizeSettingsModal = document.getElementById('real-size-settings-modal');
+    const closeSettingsModalBtn = document.getElementById('close-settings-modal');
+    const manualDPIInput = document.getElementById('manual-dpi-input');
+    const applyManualDPI = document.getElementById('apply-manual-dpi');
+    const resetManualDPI = document.getElementById('reset-manual-dpi');
+    const openCalibrationTool = document.getElementById('open-calibration-tool');
+    const calibrationToolModal = document.getElementById('calibration-tool-modal');
+    const closeCalibrationModalBtn = document.getElementById('close-calibration-modal');
+    const calibrationDPISlider = document.getElementById('calibration-dpi-slider');
+    const calibrationDPIValue = document.getElementById('calibration-dpi-value');
+    const saveCalibratedDPI = document.getElementById('save-calibrated-dpi');
+    const cancelCalibration = document.getElementById('cancel-calibration');
+    const detectedDPIDisplay = document.getElementById('detected-dpi-display');
+    const calibrationObject = document.getElementById('calibration-object');
+
+    // Update detected DPI display
+    function updateDetectedDPIDisplay() {
+        const currentDPI = getCurrentDPI();
+        const dpiSource = calibratedDPI ? 'Calibrated' : (manualDPI ? 'Manual' : 'Auto-detected');
+        detectedDPIDisplay.textContent = `${currentDPI.toFixed(1)} (${dpiSource})`;
+    }
+
+    // Open settings modal
+    if (previewOverlaySettings) {
+        previewOverlaySettings.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            updateDetectedDPIDisplay();
+            if (manualDPI) {
+                manualDPIInput.value = manualDPI;
+            }
+            realSizeSettingsModal.classList.remove('is-hidden');
+        });
+    }
+
+    // Close settings modal
+    function closeSettingsModal() {
+        realSizeSettingsModal.classList.add('is-hidden');
+    }
+
+    if (closeSettingsModalBtn) {
+        closeSettingsModalBtn.addEventListener('click', closeSettingsModal);
+    }
+
+    // Close settings modal when clicking outside
+    if (realSizeSettingsModal) {
+        realSizeSettingsModal.addEventListener('click', (e) => {
+            if (e.target === realSizeSettingsModal) {
+                closeSettingsModal();
+            }
+        });
+    }
+
+    // Apply manual DPI
+    if (applyManualDPI) {
+        applyManualDPI.addEventListener('click', () => {
+            const dpiValue = parseFloat(manualDPIInput.value);
+            if (dpiValue && dpiValue >= 72 && dpiValue <= 300) {
+                manualDPI = dpiValue;
+                localStorage.setItem('manualDPI', dpiValue.toString());
+                updateDetectedDPIDisplay();
+                alert(`Manual DPI set to ${dpiValue.toFixed(1)}. Real size display will use this value.`);
+            } else {
+                alert('Please enter a valid DPI between 72 and 300.');
+            }
+        });
+    }
+
+    // Reset manual DPI
+    if (resetManualDPI) {
+        resetManualDPI.addEventListener('click', () => {
+            manualDPI = null;
+            localStorage.removeItem('manualDPI');
+            manualDPIInput.value = '';
+            updateDetectedDPIDisplay();
+            alert('Manual DPI reset. Using auto-detected DPI.');
+        });
+    }
+
+    // Open calibration tool
+    if (openCalibrationTool) {
+        openCalibrationTool.addEventListener('click', () => {
+            realSizeSettingsModal.classList.add('is-hidden');
+            const currentDPI = getCurrentDPI();
+            calibrationDPISlider.value = currentDPI;
+            calibrationDPIValue.textContent = currentDPI.toFixed(1);
+            updateCalibrationPreview();
+            calibrationToolModal.classList.remove('is-hidden');
+        });
+    }
+
+    // Close calibration modal
+    function closeCalibrationModal() {
+        calibrationToolModal.classList.add('is-hidden');
+    }
+
+    if (closeCalibrationModalBtn) {
+        closeCalibrationModalBtn.addEventListener('click', closeCalibrationModal);
+    }
+
+    if (cancelCalibration) {
+        cancelCalibration.addEventListener('click', closeCalibrationModal);
+    }
+
+    // Close calibration modal when clicking outside
+    if (calibrationToolModal) {
+        calibrationToolModal.addEventListener('click', (e) => {
+            if (e.target === calibrationToolModal) {
+                closeCalibrationModal();
+            }
+        });
+    }
+
+    // Update calibration preview size
+    function updateCalibrationPreview() {
+        const dpi = parseFloat(calibrationDPISlider.value);
+        const widthMm = 85.6; // Credit card width
+        const lengthMm = 53.98; // Credit card length
+        const widthPx = mmToPixels(widthMm, dpi);
+        const lengthPx = mmToPixels(lengthMm, dpi);
+        
+        calibrationObject.style.width = `${widthPx}px`;
+        calibrationObject.style.height = `${lengthPx}px`;
+    }
+
+    // Calibration DPI slider
+    if (calibrationDPISlider) {
+        calibrationDPISlider.addEventListener('input', (e) => {
+            const dpi = parseFloat(e.target.value);
+            calibrationDPIValue.textContent = dpi.toFixed(1);
+            updateCalibrationPreview();
+        });
+    }
+
+    // Save calibrated DPI
+    if (saveCalibratedDPI) {
+        saveCalibratedDPI.addEventListener('click', () => {
+            const dpi = parseFloat(calibrationDPISlider.value);
+            calibratedDPI = dpi;
+            localStorage.setItem('calibratedDPI', dpi.toString());
+            updateDetectedDPIDisplay();
+            calibrationToolModal.classList.add('is-hidden');
+            alert(`Calibrated DPI saved: ${dpi.toFixed(1)}. This will be used for all real size displays.`);
+        });
+    }
+
+    // Initialize DPI display
+    updateDetectedDPIDisplay();
 
     // Close overlay when clicking outside the image
     imagePreviewOverlay.addEventListener('click', (e) => {
