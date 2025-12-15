@@ -619,6 +619,17 @@
         </div>
       </div>
 
+      <!-- Tag Delete Confirm Modal (lightbox single-tag removal) -->
+      <div id="tag-delete-confirm-modal" class="modal is-hidden">
+        <div class="modal-content-text">
+          <p>Remove tag "<span id="tag-delete-name"></span>" from this image?</p>
+          <div class="modal-buttons">
+            <button id="tag-delete-cancel-btn" class="button">Cancel</button>
+            <button id="tag-delete-confirm-btn" class="button is-primary button--danger">Remove Tag</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Clear All Confirmation Modal -->
       <div id="clear-all-confirm-modal" class="modal-overlay is-hidden">
         <div class="modal-content">
@@ -896,6 +907,11 @@
     const tagRemovalImageCount = document.getElementById('tag-removal-image-count');
     const tagRemovalCancelBtn = document.getElementById('tag-removal-cancel-btn');
     const tagRemovalConfirmBtn = document.getElementById('tag-removal-confirm-btn');
+    const tagDeleteConfirmModal = document.getElementById('tag-delete-confirm-modal');
+    const tagDeleteName = document.getElementById('tag-delete-name');
+    const tagDeleteCancelBtn = document.getElementById('tag-delete-cancel-btn');
+    const tagDeleteConfirmBtn = document.getElementById('tag-delete-confirm-btn');
+    let pendingTagDelete = null;
 
     // Clear all confirmation modal elements
     const clearAllConfirmModal = document.getElementById('clear-all-confirm-modal');
@@ -2784,8 +2800,51 @@
                 chip.classList.add('highlighted');
             }
 
+            // Add red remove "×" to request confirmation before deletion
+            const removeBtn = document.createElement('span');
+            removeBtn.className = 'lightbox-tag-remove';
+            removeBtn.textContent = '×';
+            removeBtn.title = 'Remove this tag from the image';
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleRemoveTagFromImage(currentImage.id, tagText);
+            });
+            chip.appendChild(removeBtn);
+
             lightboxTags.appendChild(chip);
         });
+    }
+
+    // Remove a single tag from an image with confirmation (used in lightbox)
+    function handleRemoveTagFromImage(imageId, tagText) {
+        const image = libraryImages.find(img => img.id === imageId);
+        if (!image || !tagDeleteConfirmModal) return;
+        pendingTagDelete = { imageId, tagText };
+        tagDeleteName.textContent = tagText;
+        tagDeleteConfirmModal.classList.remove('is-hidden');
+    }
+
+    async function confirmRemoveTagFromImage() {
+        if (!pendingTagDelete) return;
+        const { imageId, tagText } = pendingTagDelete;
+        const image = libraryImages.find(img => img.id === imageId);
+        if (!image) {
+            pendingTagDelete = null;
+            tagDeleteConfirmModal.classList.add('is-hidden');
+            return;
+        }
+        const newTags = (image.tags || []).filter(t => t !== tagText);
+        try {
+            await updateImageTags(imageId, newTags);
+            image.tags = newTags;
+            displayLightboxTags(currentPreviewIndex);
+        } catch (err) {
+            console.error('Failed to remove tag from image:', err);
+            alert('Failed to remove tag. Please try again.');
+        } finally {
+            pendingTagDelete = null;
+            tagDeleteConfirmModal.classList.add('is-hidden');
+        }
     }
 
     // --- Selection and Project Management Functions ---
@@ -6122,6 +6181,9 @@
             } else if (!isSelectionPoolPreview && e.key === 'ArrowRight') {
                 e.preventDefault();
                 imagePreviewOverlay.scrollLeft += 50;
+            } else if (!tagDeleteConfirmModal.classList.contains('is-hidden') && e.key === 'Escape') {
+                pendingTagDelete = null;
+                tagDeleteConfirmModal.classList.add('is-hidden');
             }
         }
     });
@@ -6158,6 +6220,15 @@
     tagRemovalConfirmClose.addEventListener('click', hideTagRemovalConfirmModal);
     tagRemovalCancelBtn.addEventListener('click', hideTagRemovalConfirmModal);
     tagRemovalConfirmBtn.addEventListener('click', confirmTagRemoval);
+    if (tagDeleteCancelBtn) {
+        tagDeleteCancelBtn.addEventListener('click', () => {
+            pendingTagDelete = null;
+            tagDeleteConfirmModal.classList.add('is-hidden');
+        });
+    }
+    if (tagDeleteConfirmBtn) {
+        tagDeleteConfirmBtn.addEventListener('click', confirmRemoveTagFromImage);
+    }
 
     // Clear all confirmation modal event listeners
     clearAllConfirmClose.addEventListener('click', hideClearAllConfirmModal);

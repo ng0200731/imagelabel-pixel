@@ -922,6 +922,15 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
   max-width: 100%;
   min-height: 20px;
 }
+.lightbox-tag-remove {
+  margin-left: 6px;
+  padding: 2px 6px;
+  background: #c00;
+  color: #fff;
+  font-weight: 700;
+  border-radius: 4px;
+  cursor: pointer;
+}
 
 .lightbox-tag-chip {
   display: inline-block;
