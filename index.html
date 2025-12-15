@@ -2233,6 +2233,16 @@
         }, 5000);
     }
 
+    function isObjectiveTag(tag) {
+        if (!tag) return false;
+        const t = String(tag).toLowerCase();
+        const prefixes = [
+            'book:', 'page:', 'row:', 'column:', 'type:', 'material:', 'width:',
+            'length:', 'remark:', 'brand:', 'color:', 'dimension:'
+        ];
+        return prefixes.some(p => t.startsWith(p));
+    }
+
     function getCurrentFeelingTags() {
         if (!subjChips) return [];
         return Array.from(subjChips.querySelectorAll('.chip')).map(c =>
@@ -2854,7 +2864,8 @@
         }
 
         const currentImage = libraryImages[index];
-        const imageTags = currentImage.tags || [];
+        // Only show subjective/feeling tags (exclude metadata with prefixes)
+        const imageTags = (currentImage.tags || []).filter(t => !isObjectiveTag(t));
         lightboxTags.innerHTML = '';
 
         // Left column: tag list + add input (frequency panel floats separately)
