@@ -2813,6 +2813,31 @@
 
             lightboxTags.appendChild(chip);
         });
+
+        // Add input + button for adding new tags in lightbox
+        const addWrap = document.createElement('div');
+        addWrap.className = 'lightbox-tag-add';
+
+        const addInput = document.createElement('input');
+        addInput.type = 'text';
+        addInput.placeholder = 'Add new tag (press Enter/Tab)';
+
+        const commitAdd = async () => {
+            const value = (addInput.value || '').trim();
+            if (!value) return;
+            await handleAddTagToImage(currentImage.id, value);
+            addInput.value = '';
+        };
+
+        addInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                commitAdd();
+            }
+        });
+
+        addWrap.appendChild(addInput);
+        lightboxTags.appendChild(addWrap);
     }
 
     // Remove a single tag from an image with confirmation (used in lightbox)
@@ -2844,6 +2869,25 @@
         } finally {
             pendingTagDelete = null;
             tagDeleteConfirmModal.classList.add('is-hidden');
+        }
+    }
+
+    async function handleAddTagToImage(imageId, tagText) {
+        const image = libraryImages.find(img => img.id === imageId);
+        if (!image) return;
+        const cleaned = tagText.trim();
+        if (!cleaned) return;
+        // Prevent duplicates (case-insensitive)
+        const exists = (image.tags || []).some(t => t.toLowerCase() === cleaned.toLowerCase());
+        if (exists) return;
+        const newTags = [...(image.tags || []), cleaned];
+        try {
+            await updateImageTags(imageId, newTags);
+            image.tags = newTags;
+            displayLightboxTags(currentPreviewIndex);
+        } catch (err) {
+            console.error('Failed to add tag to image:', err);
+            alert('Failed to add tag. Please try again.');
         }
     }
 

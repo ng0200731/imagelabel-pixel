@@ -931,6 +931,20 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
   border-radius: 4px;
   cursor: pointer;
 }
+.lightbox-tag-add {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+  margin-top: 12px;
+}
+.lightbox-tag-add input {
+  min-width: 200px;
+  padding: 6px 8px;
+}
+.lightbox-tag-add button {
+  padding: 6px 10px;
+}
 
 .lightbox-tag-chip {
   display: inline-block;
