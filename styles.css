@@ -951,6 +951,26 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
   z-index: 9999;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
+.lightbox-save-btn {
+  position: absolute;
+  right: 52px;
+  top: 10px;
+  background: #1e9a4a;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+}
+.lightbox-save-btn:hover {
+  background: #17843f;
+}
+.lightbox-save-btn.is-hidden {
+  display: none;
+}
 .lightbox-freq-floating h4 {
   margin: 0 0 8px 0;
   font-size: 14px;

@@ -305,6 +305,7 @@
   <!-- Lightbox Modal -->
   <div id="lightbox-modal" class="modal is-hidden">
     <span class="modal-close">&times;</span>
+    <button id="lightbox-save-btn" class="lightbox-save-btn is-hidden" type="button">Save</button>
     <a class="prev">&#10094;</a>
     <div class="lightbox-content">
       <img class="modal-content" id="lightbox-image">
@@ -808,6 +809,7 @@
     const closeModal = document.querySelector('.modal-close');
     const prevButton = document.querySelector('.prev');
     const nextButton = document.querySelector('.next');
+    const lightboxSaveBtn = document.getElementById('lightbox-save-btn');
     const uploadButton = document.getElementById('upload-button');
     const librarySearchInput = document.getElementById('library-search-input');
     const libraryGrid = document.getElementById('library-grid');
@@ -2423,6 +2425,7 @@
         const freqFloating = document.getElementById('lightbox-freq-floating');
         if (freqFloating) freqFloating.remove();
         pendingAddTags.clear();
+        if (lightboxSaveBtn) lightboxSaveBtn.classList.add('is-hidden');
     }
 
     // --- Library Lightbox Functions ---
@@ -2435,6 +2438,7 @@
         displayLightboxTags(index);
         renderLightboxFreqFloating(libraryImages[index].id);
         modal.classList.remove('is-hidden');
+        if (lightboxSaveBtn) lightboxSaveBtn.classList.remove('is-hidden');
         updateArrowVisibility();
     }
 
@@ -2446,6 +2450,7 @@
         if (libraryImages[index]) {
             renderLightboxFreqFloating(libraryImages[index].id);
         }
+        if (lightboxSaveBtn) lightboxSaveBtn.classList.remove('is-hidden');
         updateArrowVisibility();
     }
 
@@ -2855,14 +2860,6 @@
         lightboxTags.appendChild(tagList);
         lightboxTags.appendChild(addWrap);
 
-        // Save button for pending adds
-        const saveBtn = document.createElement('button');
-        saveBtn.className = 'button button--primary';
-        saveBtn.textContent = 'Save';
-        saveBtn.style.marginTop = '8px';
-        saveBtn.addEventListener('click', () => saveLightboxTagChanges(currentImage.id));
-        lightboxTags.appendChild(saveBtn);
-
         renderLightboxFreqFloating(currentImage.id);
     }
 
@@ -2916,7 +2913,7 @@
         return true;
     }
 
-    async function saveLightboxTagChanges(imageId) {
+    async function saveLightboxTagChanges(imageId, { closeAfterSave = false } = {}) {
         const image = libraryImages.find(img => img.id === imageId);
         if (!image) return;
         if (pendingAddTags.size === 0) {
@@ -2937,6 +2934,9 @@
             displayLightboxTags(currentPreviewIndex);
             renderLightboxFreqFloating(imageId);
             showLightboxToast('Tags saved');
+            if (closeAfterSave) {
+                hideModal();
+            }
         } catch (err) {
             console.error('Failed to save tags:', err);
             alert('Failed to save tags. Please try again.');
@@ -6410,6 +6410,14 @@
     }
     if (tagDeleteConfirmBtn) {
         tagDeleteConfirmBtn.addEventListener('click', confirmRemoveTagFromImage);
+    }
+    if (lightboxSaveBtn) {
+        lightboxSaveBtn.addEventListener('click', () => {
+            const current = libraryImages[currentImageIndex];
+            if (current) {
+                saveLightboxTagChanges(current.id, { closeAfterSave: true });
+            }
+        });
     }
 
     // Clear all confirmation modal event listeners
