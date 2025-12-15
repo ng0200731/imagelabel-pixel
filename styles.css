@@ -953,8 +953,8 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
 }
 .lightbox-save-btn {
   position: absolute;
-  right: 52px;
-  top: 10px;
+  right: 60px; /* closer to the close icon but still with comfortable spacing */
+  top: 10px; /* align vertically with the white close icon */
   background: #1e9a4a;
   color: #fff;
   border: none;
@@ -1056,10 +1056,10 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
 
 .modal-close {
   position: absolute;
-  top: 15px;
-  right: 35px;
+  top: 10px;
+  right: 10px;
   color: #f1f1f1;
-  font-size: 40px;
+  font-size: 32px;
   font-weight: bold;
   transition: 0.3s;
   cursor: pointer;
