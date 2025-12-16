@@ -290,6 +290,7 @@ function generateHtmlContent(projectData, senderMessage) {
         // Extract metadata from image object or tags
         const metadata = extractImageMetadata(image);
         const subjectiveTags = getSubjectiveTags(image);
+        const allTags = getAllTags(image, metadata);
 
         html += `
             <div class="image-section">
@@ -336,9 +337,9 @@ function generateHtmlContent(projectData, senderMessage) {
                             </div>
                         </div>
                         <div class="metadata-section subjective-tags">
-                            <div class="metadata-title">SUBJECTIVE (FEELINGS)</div>
+                            <div class="metadata-title">All Tags</div>
                             <div class="tag-list">
-                                ${subjectiveTags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                                ${allTags.map(tag => `<span class="tag">${tag}</span>`).join('')}
                             </div>
                         </div>
                     </div>
@@ -407,6 +408,27 @@ function extractImageMetadata(image) {
     }
 
     return metadata;
+}
+
+/**
+ * Get all tags: subjective + metadata key/value pairs
+ */
+function getAllTags(image, metadata) {
+    const all = [];
+    const meta = metadata || extractImageMetadata(image);
+
+    // Include metadata key/value pairs if present
+    Object.entries(meta).forEach(([key, value]) => {
+        if (value) {
+            all.push(`${key}:${value}`);
+        }
+    });
+
+    // Include subjective tags
+    const subjective = getSubjectiveTags(image);
+    subjective.forEach(tag => all.push(tag));
+
+    return all.length > 0 ? all : ['No tags'];
 }
 
 /**
