@@ -1270,9 +1270,9 @@ app.get('/admin/users', async (req, res) => {
             return res.status(403).json({ error: 'Admin access required' });
         }
 
-        // Get all users
+        // Get all users (include level)
         const users = db.prepare(`
-            SELECT id, email, status, role, created_at, approved_at, last_login
+            SELECT id, email, status, role, COALESCE(level, 1) AS level, created_at, approved_at, last_login
             FROM users
             ORDER BY created_at DESC
         `).all();
@@ -1327,6 +1327,100 @@ app.post('/admin/users/:id/approve', async (req, res) => {
     } catch (error) {
         console.error('Error approving user:', error);
         res.status(500).json({ error: 'Failed to approve user' });
+    }
+});
+
+// Admin: Update user level (1, 2, 3)
+app.post('/admin/users/:id/level', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    const userId = parseInt(req.params.id);
+    const { level } = req.body || {};
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'No valid session token' });
+    }
+
+    const sessionToken = authHeader.substring(7);
+
+    try {
+        // Verify admin session
+        const session = db.prepare(`
+            SELECT s.*, u.email, u.role
+            FROM login_sessions s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.session_token = ? AND s.expires_at > datetime('now') AND u.role = 'admin'
+        `).get(sessionToken);
+
+        if (!session) {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const numericLevel = parseInt(level, 10);
+        if (![1, 2, 3].includes(numericLevel)) {
+            return res.status(400).json({ error: 'Invalid level. Must be 1, 2, or 3.' });
+        }
+
+        const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        db.prepare('UPDATE users SET level = ? WHERE id = ?').run(numericLevel, userId);
+
+        res.json({ message: 'User level updated successfully' });
+    } catch (error) {
+        console.error('Error updating user level:', error);
+        res.status(500).json({ error: 'Failed to update user level' });
+    }
+});
+
+// Admin: Delete user
+app.delete('/admin/users/:id', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    const userId = parseInt(req.params.id);
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'No valid session token' });
+    }
+
+    const sessionToken = authHeader.substring(7);
+
+    try {
+        // Verify admin session
+        const session = db.prepare(`
+            SELECT s.*, u.email, u.role, u.id as admin_user_id
+            FROM login_sessions s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.session_token = ? AND s.expires_at > datetime('now') AND u.role = 'admin'
+        `).get(sessionToken);
+
+        if (!session) {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        // Prevent admin from deleting themselves
+        if (session.admin_user_id === userId) {
+            return res.status(400).json({ error: 'You cannot delete your own account' });
+        }
+
+        const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Clean up sessions for this user
+        db.prepare(`
+            DELETE FROM login_sessions
+            WHERE user_id = ?
+        `).run(userId);
+
+        // Finally delete the user
+        db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+
+        res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ error: 'Failed to delete user' });
     }
 });
 

@@ -285,6 +285,7 @@
                     <th>Status</th>
                     <th>Registration Date</th>
                     <th>Last Login</th>
+                    <th>User Type</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -4962,18 +4963,81 @@
         const usersTbody = document.getElementById('admin-users-tbody');
         usersTbody.innerHTML = '';
         
+        const sessionToken = localStorage.getItem('sessionToken');
+        
         users.forEach(user => {
             const row = document.createElement('tr');
             
             const statusClass = `status-${user.status}`;
+            const level = parseInt(user.level, 10) || 1;
             
             row.innerHTML = `
                 <td>${user.email}</td>
                 <td><span class="status-badge ${statusClass}">${user.status}</span></td>
                 <td>${formatAdminDate(user.created_at)}</td>
                 <td>${formatAdminDate(user.last_login)}</td>
-                <td>-</td>
+                <td>
+                    <select class="admin-user-level-select" data-user-id="${user.id}">
+                        <option value="1" ${level === 1 ? 'selected' : ''}>Level 1</option>
+                        <option value="2" ${level === 2 ? 'selected' : ''}>Level 2</option>
+                        <option value="3" ${level === 3 ? 'selected' : ''}>Level 3</option>
+                    </select>
+                </td>
+                <td>
+                    <button type="button" class="admin-user-delete-btn" data-user-id="${user.id}" data-user-email="${user.email}">Delete</button>
+                </td>
             `;
+            
+            const levelSelect = row.querySelector('.admin-user-level-select');
+            if (levelSelect) {
+                levelSelect.addEventListener('change', async (e) => {
+                    const newLevel = parseInt(e.target.value, 10);
+                    if (!sessionToken) return;
+                    try {
+                        const response = await fetch(`${API_URL}/admin/users/${user.id}/level`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${sessionToken}`
+                            },
+                            body: JSON.stringify({ level: newLevel })
+                        });
+                        if (!response.ok) {
+                            throw new Error('Failed to update user level');
+                        }
+                        showAdminMessage(`Updated ${user.email} to Level ${newLevel}`, 'success');
+                    } catch (err) {
+                        console.error('Error updating user level:', err);
+                        showAdminMessage('Failed to update user level', 'error');
+                        // revert select on error
+                        e.target.value = String(level);
+                    }
+                });
+            }
+            
+            const deleteBtn = row.querySelector('.admin-user-delete-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', async () => {
+                    const confirmed = window.confirm(`Delete user "${user.email}"? This cannot be undone.`);
+                    if (!confirmed || !sessionToken) return;
+                    try {
+                        const response = await fetch(`${API_URL}/admin/users/${user.id}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `Bearer ${sessionToken}`
+                            }
+                        });
+                        if (!response.ok) {
+                            throw new Error('Failed to delete user');
+                        }
+                        row.remove();
+                        showAdminMessage(`Deleted user ${user.email}`, 'success');
+                    } catch (err) {
+                        console.error('Error deleting user:', err);
+                        showAdminMessage('Failed to delete user', 'error');
+                    }
+                });
+            }
             
             usersTbody.appendChild(row);
         });
@@ -5664,13 +5728,23 @@
 
             console.log('Email data being sent to backend:', emailData);
 
+            const sessionToken = localStorage.getItem('sessionToken');
+            if (!sessionToken) {
+                throw new Error('Not authenticated. Please log in again.');
+            }
+
             const response = await fetch(`${API_URL}/projects/${projectId}/share`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${sessionToken}`
                 },
                 body: JSON.stringify(emailData)
             });
+
+            if (response.status === 401 || response.status === 403) {
+                throw new Error('Not authorized. Please log in again.');
+            }
 
             if (response.ok) {
                 emailSendingOverlay.classList.add('is-hidden');
@@ -5679,13 +5753,13 @@
                 // Refresh email history displays immediately
                 await refreshEmailHistoryDisplays(projectId);
             } else {
-                const error = await response.text();
-                throw new Error(error || 'Failed to share project');
+                const errorText = await response.text();
+                throw new Error(errorText || 'Failed to share project');
             }
         } catch (error) {
             console.error('Error sharing project:', error);
             emailSendingOverlay.classList.add('is-hidden');
-            alert('Failed to share project. Please try again.');
+            alert(error.message || 'Failed to share project. Please try again.');
         } finally {
             // Reset button state
             sendShareBtn.disabled = false;
