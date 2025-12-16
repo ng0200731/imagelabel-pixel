@@ -981,16 +981,19 @@ app.post('/projects/:id/share', async (req, res) => {
         const imageIds = cleanImageIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
 
         const placeholders = imageIds.map(() => '?').join(',');
+
+        // Simple version: load all images in this project, ignore ownership filter
         const query = `
             SELECT i.*, GROUP_CONCAT(t.name) as tags
             FROM images i
             LEFT JOIN image_tags it ON i.id = it.image_id
             LEFT JOIN tags t ON it.tag_id = t.id
-            WHERE i.id IN (${placeholders}) AND i.ownership = ?
+            WHERE i.id IN (${placeholders})
             GROUP BY i.id
         `;
 
-        const projectImages = db.prepare(query).all(...imageIds, userEmail);
+        const projectImages = db.prepare(query).all(...imageIds);
+        console.log('[Share Email] Loaded images for project', projectId, 'count:', projectImages.length);
 
         // Format images data for email
         const imagesWithTags = projectImages.map(img => ({
