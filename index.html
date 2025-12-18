@@ -2408,6 +2408,29 @@
         chip.className = 'chip is-subjective';
         chip.textContent = text;
         chip.tabIndex = 0;
+
+        // Hover behavior: temporarily "flash" images that match this tag
+        chip.addEventListener('mouseenter', () => {
+            const tagLower = text.toLowerCase();
+            const cards = document.querySelectorAll('.library-card');
+            cards.forEach(card => {
+                const imageId = parseInt(card.dataset.imageId, 10);
+                const img = libraryImages.find(img => img.id === imageId);
+                if (!img || !img.tags) return;
+                const hasTag = img.tags.some(t => t.toLowerCase() === tagLower);
+                if (hasTag) {
+                    // Pass the tag color into the card via CSS variable for the running dotted border
+                    const c = searchTagColors && searchTagColors[tagLower] ? searchTagColors[tagLower] : '#000';
+                    card.style.setProperty('--tag-flash-color', c);
+                    card.classList.add('tag-flash');
+                }
+            });
+        });
+
+        chip.addEventListener('mouseleave', () => {
+            const cards = document.querySelectorAll('.library-card.tag-flash');
+            cards.forEach(card => card.classList.remove('tag-flash'));
+        });
         chip.addEventListener('click', () => chip.classList.toggle('is-selected'));
         const x = document.createElement('button');
         x.type = 'button';
@@ -2617,8 +2640,8 @@
         // Save the updated tag order
         saveTagCreationOrder();
 
-        // Add to searchTags array
-        searchTags.push({ text: text, hasMatches: true });
+        // Add to searchTags array (newest tags at the front)
+        searchTags.unshift({ text: text, hasMatches: true });
 
         // Create chip element with count
         const chip = document.createElement('span');
@@ -2641,7 +2664,8 @@
             console.error(`Error getting count for tag "${text}":`, error);
         }
 
-        const order = searchTags.length;
+        // Temporary order; we'll renumber all chips after insertion
+        let order = 1;
 
         if (imageCount === 0) {
             // Mark as no matches - red box
@@ -2663,6 +2687,8 @@
             if (tagEntry) tagEntry.hasMatches = true;
         }
         chip.tabIndex = 0;
+        chip.dataset.tag = text;
+        chip.dataset.count = String(imageCount);
 
         // Add delete button
         const deleteBtn = document.createElement('button');
@@ -2677,8 +2703,41 @@
         });
 
         chip.appendChild(deleteBtn);
-        librarySearchChips.appendChild(chip);
+        // Insert newest chip at the beginning so its images appear first in the row order
+        if (librarySearchChips.firstChild) {
+            librarySearchChips.insertBefore(chip, librarySearchChips.firstChild);
+        } else {
+            librarySearchChips.appendChild(chip);
+        }
+
         updateClearButtonState();
+    }
+
+    function renumberSearchChips() {
+        const chips = Array.from(librarySearchChips.querySelectorAll('.search-chip'));
+        chips.forEach((chip, index) => {
+            const order = index + 1;
+            const tag = chip.dataset.tag || '';
+            const count = chip.dataset.count || '';
+
+            // Preserve class and color, only change the label text
+            if (chip.classList.contains('no-matches')) {
+                chip.textContent = `#${order} ${tag} (0)`;
+            } else {
+                chip.textContent = `#${order} ${tag}(${count})`;
+            }
+
+            // Re-append delete button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'chip-delete';
+            deleteBtn.textContent = '×';
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showTagRemovalConfirmation(tag);
+            });
+            chip.appendChild(deleteBtn);
+        });
     }
 
     function removeSearchTagChipInPoolView(tagText) {
@@ -2725,12 +2784,8 @@
         // Remove chip from DOM
         const chips = librarySearchChips.querySelectorAll('.search-chip');
         chips.forEach(chip => {
-            // Extract tag name from "#order tag (count)" format, ignoring the leading "#N " and trailing "(count)"
-            let chipText = chip.textContent.replace(/[×x]$/, '').trim();
-            chipText = chipText.replace(/\s*\(\d+\)\s*$/, ''); // Remove "(count)"
-            chipText = chipText.replace(/^#\d+\s+/, '');       // Remove leading "#N "
-            const tagName = chipText.toLowerCase();
-            if (tagName === tagText.toLowerCase()) {
+            const chipTag = (chip.dataset.tag || '').toLowerCase();
+            if (chipTag === tagText.toLowerCase()) {
                 chip.remove();
             }
         });
@@ -2811,12 +2866,8 @@
         // Remove chip from DOM
         const chips = librarySearchChips.querySelectorAll('.search-chip');
         chips.forEach(chip => {
-            // Extract tag name from "#order tag (count)" format, ignoring "#N " and "(count)"
-            let chipText = chip.textContent.replace(/[×x]$/, '').trim();
-            chipText = chipText.replace(/\s*\(\d+\)\s*$/, ''); // Remove "(count)"
-            chipText = chipText.replace(/^#\d+\s+/, '');       // Remove leading "#N "
-            const tagName = chipText.toLowerCase();
-            if (tagName === tagText.toLowerCase()) {
+            const chipTag = (chip.dataset.tag || '').toLowerCase();
+            if (chipTag === tagText.toLowerCase()) {
                 chip.remove();
             }
         });
@@ -2894,11 +2945,12 @@
 
 
     function updateSearchInput() {
-        // Mark as programmatic update to prevent triggering clearAllSearchChips
+        // We keep the visible input EMPTY; chips below represent current tags.
+        // Only manage the programmaticUpdate flag so clearing doesn't wipe chips.
         librarySearchInput.dataset.programmaticUpdate = 'true';
-        librarySearchInput.value = searchTags.map(tag => tag.text).join(', ');
-        
-        // Remove the flag using requestAnimationFrame for better reliability
+        librarySearchInput.value = '';
+
+        // Remove the flag shortly after to resume normal behavior.
         requestAnimationFrame(() => {
             setTimeout(() => {
                 delete librarySearchInput.dataset.programmaticUpdate;
@@ -2938,8 +2990,7 @@
             librarySearchInput.value = '';
         }, 0);
 
-        // Clear search chips and reset state
-        clearAllSearchChips();
+        // NOTE: Do not clear existing chips here; only reset the raw input field.
     }
 
     function getMatchingTags(imageTags, searchTags) {

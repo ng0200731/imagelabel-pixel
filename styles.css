@@ -1326,6 +1326,37 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
   background: rgba(46, 125, 50, 0.2);
 }
 
+/* Flash effect for images when hovering a search tag chip */
+.library-card.tag-flash {
+  position: relative;
+}
+
+.library-card.tag-flash::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 4px;
+  pointer-events: none;
+  border: 2px dotted var(--tag-flash-color, #000);
+  box-sizing: border-box;
+  animation: tag-flash-dots 0.8s linear infinite;
+}
+
+@keyframes tag-flash-dots {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  50% {
+    opacity: 0.4;
+    transform: translate(1px, 1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+}
+
 /* Selection Controls */
 .selection-controls {
   display: flex;
