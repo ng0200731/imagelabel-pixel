@@ -2640,7 +2640,7 @@
         // Save the updated tag order
         saveTagCreationOrder();
 
-        // Add to searchTags array (newest tags at the front)
+        // Add to searchTags array (newest at the front)
         searchTags.unshift({ text: text, hasMatches: true });
 
         // Create chip element with count
@@ -2703,20 +2703,23 @@
         });
 
         chip.appendChild(deleteBtn);
-        // Insert newest chip at the beginning so its images appear first in the row order
+        // Insert newest chip at the beginning so it appears on the left
         if (librarySearchChips.firstChild) {
             librarySearchChips.insertBefore(chip, librarySearchChips.firstChild);
         } else {
             librarySearchChips.appendChild(chip);
         }
 
+        // Renumber all chips so leftmost is highest # and rightmost is #1
+        renumberSearchChips();
         updateClearButtonState();
     }
 
     function renumberSearchChips() {
         const chips = Array.from(librarySearchChips.querySelectorAll('.search-chip'));
         chips.forEach((chip, index) => {
-            const order = index + 1;
+            // Rightmost (newest) chip is #1, then #2, etc.
+            const order = chips.length - index;
             const tag = chip.dataset.tag || '';
             const count = chip.dataset.count || '';
 
@@ -2724,7 +2727,7 @@
             if (chip.classList.contains('no-matches')) {
                 chip.textContent = `#${order} ${tag} (0)`;
             } else {
-                chip.textContent = `#${order} ${tag}(${count})`;
+                chip.textContent = `#${order} ${tag} (${count})`;
             }
 
             // Re-append delete button
@@ -2790,14 +2793,14 @@
             }
         });
 
-        // Update search input manually (avoid triggering events)
-        const remainingTags = searchTags.map(tag => tag.text).join(', ');
-        librarySearchInput.value = remainingTags;
+        // Keep input visually empty; chips represent current tags
+        librarySearchInput.value = '';
         
         // Force preserve pool view state
         isPoolView = originalPoolView;
         console.log('Forced isPoolView back to:', isPoolView);
         
+        renumberSearchChips();
         updateClearButtonState();
         
         // Directly refresh pool view without calling any functions that might reset state
@@ -2872,11 +2875,9 @@
             }
         });
 
-        // Update search input and refresh results
-        console.log('About to call updateSearchInput, isPoolView:', isPoolView);
-        updateSearchInput();
-        console.log('After updateSearchInput, isPoolView:', isPoolView);
-        
+        // Keep input visually empty; chips represent current tags
+        console.log('About to renumber chips after removal, isPoolView:', isPoolView);
+        renumberSearchChips();
         updateClearButtonState();
         console.log('After updateClearButtonState, isPoolView:', isPoolView);
         
