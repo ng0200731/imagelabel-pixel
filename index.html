@@ -1371,19 +1371,45 @@
                 return !objectivePrefixes.some(prefix => tagLower.startsWith(prefix));
             });
 
-            // Always show all tags (or first 3 + count), but highlight if there are matches
+            // Always show all tags (or first 3 + count), but highlight if there are matches.
+            // The overlay color should follow the GROUP tag (earliest chip the image matches),
+            // so all images in the same group share the same box color.
             if (matchingSubjectiveTags.length > 0) {
                 tagOverlay.classList.add('has-matches');
 
-                // Use the first matching tag's color (if any) for overlay highlight
-                let overlayColor = null;
-                for (const mt of matchingSubjectiveTags) {
-                    const c = searchTagColors[mt.toLowerCase()];
-                    if (c) {
-                        overlayColor = c;
-                        break;
+                // Determine primary/group tag from chip order (left → right)
+                let primaryTagLower = null;
+                const chipContainer = document.getElementById('library-search-chips');
+                if (chipContainer) {
+                    const chipNodes = Array.from(chipContainer.querySelectorAll('.search-chip'));
+                    const chipTagsInOrder = chipNodes
+                        .map(chip => (chip.dataset.tag || '').toLowerCase())
+                        .filter(tag => tag);
+
+                    for (const chipTag of chipTagsInOrder) {
+                        if (matchingSubjectiveTags.some(mt => mt.toLowerCase() === chipTag)) {
+                            primaryTagLower = chipTag;
+                            break;
+                        }
                     }
                 }
+
+                let overlayColor = null;
+                if (primaryTagLower && searchTagColors[primaryTagLower]) {
+                    overlayColor = searchTagColors[primaryTagLower];
+                }
+
+                // Fallback: first matching tag color
+                if (!overlayColor) {
+                    for (const mt of matchingSubjectiveTags) {
+                        const c = searchTagColors[mt.toLowerCase()];
+                        if (c) {
+                            overlayColor = c;
+                            break;
+                        }
+                    }
+                }
+
                 if (overlayColor) {
                     tagOverlay.style.backgroundColor = overlayColor;
                     tagOverlay.style.color = '#ffffff';
@@ -1492,16 +1518,41 @@
                 }
             }
 
-            // Apply per-tag highlight color to the card outline based on matching tags
+            // Apply per-tag highlight color to the card outline based on matching tags.
+            // Use the same primary/group tag logic so outline color matches the group color.
             if (matchingTags.length > 0) {
-                let cardColor = null;
-                for (const mt of matchingTags) {
-                    const c = searchTagColors[mt.toLowerCase()];
-                    if (c) {
-                        cardColor = c;
-                        break;
+                let primaryTagLower = null;
+                const chipContainer = document.getElementById('library-search-chips');
+                if (chipContainer) {
+                    const chipNodes = Array.from(chipContainer.querySelectorAll('.search-chip'));
+                    const chipTagsInOrder = chipNodes
+                        .map(chip => (chip.dataset.tag || '').toLowerCase())
+                        .filter(tag => tag);
+
+                    for (const chipTag of chipTagsInOrder) {
+                        if (matchingTags.some(mt => mt.toLowerCase() === chipTag)) {
+                            primaryTagLower = chipTag;
+                            break;
+                        }
                     }
                 }
+
+                let cardColor = null;
+                if (primaryTagLower && searchTagColors[primaryTagLower]) {
+                    cardColor = searchTagColors[primaryTagLower];
+                }
+
+                // Fallback: first matching tag color
+                if (!cardColor) {
+                    for (const mt of matchingTags) {
+                        const c = searchTagColors[mt.toLowerCase()];
+                        if (c) {
+                            cardColor = c;
+                            break;
+                        }
+                    }
+                }
+
                 if (cardColor) {
                     card.style.outline = `3px solid ${cardColor}`;
                     card.style.outlineOffset = '2px';
