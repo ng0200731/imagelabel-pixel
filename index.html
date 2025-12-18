@@ -475,8 +475,9 @@
                 <span id="project-detail-count">📊 Total Images: 12</span>
                 <span id="project-detail-owner" style="display: none;">👤 Created by: </span>
               </div>
-              <div class="project-tags-row">
-                <span id="project-detail-tags">🏷️ Tags: beach, sunset, family</span>
+              <!-- Project tags row removed per request -->
+              <div class="project-tags-row" style="display:none;">
+                <span id="project-detail-tags"></span>
               </div>
             </div>
           </div>
@@ -3844,9 +3845,10 @@
         console.log('Project detail - countText:', countText);
         projectDetailCount.textContent = countText;
 
-        // Get unique tags from project images
-        const projectTags = getProjectTags(project.image_ids);
-        projectDetailTags.textContent = `🏷️ Tags: ${projectTags.join(', ') || 'No tags'}`;
+        // Project-level tag list removed from header per request
+        if (projectDetailTags) {
+            projectDetailTags.textContent = '';
+        }
 
         // Load project images
         loadProjectImages(project.image_ids);
@@ -4043,20 +4045,7 @@
                 };
                 testImg.src = imageSrc;
 
-                // Add tag overlay - show tags on project images (same style as library)
-                const imageTags = image.tags || [];
-                if (imageTags.length > 0) {
-                    const tagOverlay = document.createElement('div');
-                    tagOverlay.className = 'tag-overlay';
-
-                    // Show first 3 tags for project images
-                    tagOverlay.textContent = imageTags.slice(0, 3).join(', ');
-                    if (imageTags.length > 3) {
-                        tagOverlay.textContent += ` +${imageTags.length - 3}`;
-                    }
-
-                    card.appendChild(tagOverlay);
-                }
+                // Per-image tag overlay removed from project detail view per request
 
                 // Create icons container
                 const iconsContainer = document.createElement('div');
@@ -6466,25 +6455,13 @@
         }
     });
 
-    // Also handle input changes for real-time search
+    // Also handle input changes for real-time search (no longer clears chips on Backspace/Delete)
     librarySearchInput.addEventListener('input', (e) => {
-        console.log('=== INPUT EVENT TRIGGERED ===');
+        console.log('=== INPUT EVENT TRIGGERED (no auto-clear) ===');
         console.log('Input value:', `"${e.target.value}"`);
         console.log('programmaticUpdate flag:', e.target.dataset.programmaticUpdate);
         console.log('isPoolView:', isPoolView);
-        
-        // IMPORTANT: Only clear chips if this is a USER action, not programmatic update
-        // Check if we're in the middle of removing a single tag chip
-        // ALSO: Don't clear all chips if we're in pool view to prevent losing pool context
-        if (e.target.value === '' && !e.target.dataset.programmaticUpdate && !isPoolView) {
-            console.log('CONDITIONS MET - calling clearAllSearchChips()');
-            clearAllSearchChips();
-        } else {
-            console.log('CONDITIONS NOT MET - NOT calling clearAllSearchChips()');
-            console.log('- value empty:', e.target.value === '');
-            console.log('- not programmatic:', !e.target.dataset.programmaticUpdate);
-            console.log('- not pool view:', !isPoolView);
-        }
+        // Tags can only be removed via chip "×" or Clear All button now.
         console.log('=== INPUT EVENT END ===');
     });
 
