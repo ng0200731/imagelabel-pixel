@@ -573,9 +573,9 @@ app.get('/tag-frequencies', (req, res) => {
             rows = db.prepare(`
                 SELECT name, count
                 FROM feeling_usage
-                WHERE user_email = ?
+                WHERE LOWER(user_email) = ?
                 ORDER BY count DESC, name ASC
-            `).all(user.email);
+            `).all(user.email.toLowerCase());
         }
 
         const result = rows.map(r => ({
@@ -661,7 +661,8 @@ app.put('/images/:id/tags', (req, res) => {
             return res.status(404).send('Image not found');
         }
         const userLevel = parseInt(user.level) || 1;
-        if (userLevel !== 3 && image.ownership !== user.email) {
+        // Case-insensitive ownership check
+        if (userLevel !== 3 && image.ownership && image.ownership.toLowerCase() !== user.email.toLowerCase()) {
             return res.status(403).send('You do not have permission to modify this image');
         }
 
@@ -726,7 +727,8 @@ app.get('/projects', (req, res) => {
         if (userLevel === 3) {
             projects = db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all();
         } else {
-            projects = db.prepare('SELECT * FROM projects WHERE ownership = ? ORDER BY created_at DESC').all(user.email);
+            // Case-insensitive ownership check
+            projects = db.prepare('SELECT * FROM projects WHERE LOWER(ownership) = ? ORDER BY created_at DESC').all(user.email.toLowerCase());
         }
 
         // Parse image_ids for each project (handle different formats)
@@ -818,7 +820,8 @@ app.delete('/projects/:id', (req, res) => {
         }
 
         const userLevel = parseInt(user.level) || 1;
-        if (userLevel !== 3 && project.ownership !== user.email) {
+        // Case-insensitive ownership check
+        if (userLevel !== 3 && project.ownership.toLowerCase() !== user.email.toLowerCase()) {
             return res.status(403).send('You do not have permission to delete this project');
         }
 
@@ -854,8 +857,8 @@ app.delete('/images/:id', (req, res) => {
 
         console.log(`Delete image request - User: ${user.email}, Role: ${user.role}, Level from session: ${user.level} (type: ${typeof user.level})`);
 
-        // Get user's actual level from database (in case session is stale)
-        const userFromDb = db.prepare('SELECT level, role FROM users WHERE email = ?').get(user.email);
+        // Get user's actual level from database (in case session is stale, case-insensitive)
+        const userFromDb = db.prepare('SELECT level, role FROM users WHERE LOWER(email) = ?').get(user.email.toLowerCase());
         if (!userFromDb) {
             console.error(`Delete image: User ${user.email} not found in database`);
             return res.status(401).send('User not found');
@@ -887,7 +890,7 @@ app.delete('/images/:id', (req, res) => {
         } else if (isAdmin) {
             hasPermission = true;
             console.log(`✅ Permission granted - User is admin, can delete ANY image`);
-        } else if (image.ownership === user.email) {
+        } else if (image.ownership && image.ownership.toLowerCase() === user.email.toLowerCase()) {
             hasPermission = true;
             console.log(`✅ Permission granted - User owns this image`);
         } else {
@@ -1067,15 +1070,18 @@ app.get('/projects/:id/email-history', (req, res) => {
 
 // Send verification code
 app.post('/auth/send-code', async (req, res) => {
-    const { email } = req.body;
+    let { email } = req.body;
 
     if (!email) {
         return res.status(400).json({ error: 'Email is required' });
     }
 
+    // Normalize email to lowercase for case-insensitive comparison
+    email = email.toLowerCase().trim();
+
     try {
-        // Check if user exists
-        let user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+        // Check if user exists (case-insensitive)
+        let user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(email);
         let userStatus = 'existing';
 
         if (!user) {
@@ -1129,17 +1135,20 @@ app.post('/auth/send-code', async (req, res) => {
 
 // Verify code and login
 app.post('/auth/verify-code', async (req, res) => {
-    const { email, code } = req.body;
+    let { email, code } = req.body;
 
     if (!email || !code) {
         return res.status(400).json({ error: 'Email and code are required' });
     }
 
+    // Normalize email to lowercase for case-insensitive comparison
+    email = email.toLowerCase().trim();
+
     try {
-        // Check verification code
+        // Check verification code (case-insensitive)
         const verificationRecord = db.prepare(`
             SELECT * FROM verification_codes
-            WHERE email = ? AND code = ? AND used = FALSE AND expires_at > datetime('now')
+            WHERE LOWER(email) = ? AND code = ? AND used = FALSE AND expires_at > datetime('now')
             ORDER BY created_at DESC LIMIT 1
         `).get(email, code);
 
@@ -1147,8 +1156,8 @@ app.post('/auth/verify-code', async (req, res) => {
             return res.status(400).json({ error: 'Invalid or expired verification code' });
         }
 
-        // Check user exists
-        const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+        // Check user exists (case-insensitive)
+        const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(email);
 
         if (!user) {
             return res.status(400).json({ error: 'User not found' });
@@ -1273,10 +1282,23 @@ app.get('/admin/users', async (req, res) => {
             return res.status(403).json({ error: 'Admin access required' });
         }
 
-        // Get all users (include level)
+        // Get all users (include level), normalize email to lowercase for display
+        // Group by lowercase email to handle duplicates, keeping the one with latest activity
         const users = db.prepare(`
-            SELECT id, email, status, role, COALESCE(level, 1) AS level, created_at, approved_at, last_login
+            SELECT id, LOWER(email) as email, status, role, COALESCE(level, 1) AS level, created_at, approved_at, last_login
             FROM users
+            WHERE id IN (
+                SELECT id FROM (
+                    SELECT id, LOWER(email) as lower_email,
+                           ROW_NUMBER() OVER (PARTITION BY LOWER(email) ORDER BY 
+                               CASE WHEN last_login IS NOT NULL THEN 0 ELSE 1 END,
+                               last_login DESC,
+                               created_at ASC
+                           ) as rn
+                    FROM users
+                )
+                WHERE rn = 1
+            )
             ORDER BY created_at DESC
         `).all();
 
@@ -1363,12 +1385,13 @@ app.post('/admin/users/:id/level', async (req, res) => {
             return res.status(400).json({ error: 'Invalid level. Must be 1, 2, or 3.' });
         }
 
-        const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+        const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(userId);
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        db.prepare('UPDATE users SET level = ? WHERE id = ?').run(numericLevel, userId);
+        // Update level for all users with the same email (case-insensitive)
+        db.prepare('UPDATE users SET level = ? WHERE LOWER(email) = ?').run(numericLevel, user.email.toLowerCase());
 
         res.json({ message: 'User level updated successfully' });
     } catch (error) {
@@ -1417,8 +1440,25 @@ app.delete('/admin/users/:id', async (req, res) => {
             WHERE user_id = ?
         `).run(userId);
 
-        // Finally delete the user
-        db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+        // Get the user's email to delete all case-insensitive duplicates
+        const userToDelete = db.prepare('SELECT email FROM users WHERE id = ?').get(userId);
+        if (userToDelete) {
+            const emailLower = userToDelete.email.toLowerCase();
+            
+            // Get all user IDs with this email (case-insensitive) to clean up sessions
+            const duplicateUsers = db.prepare('SELECT id FROM users WHERE LOWER(email) = ?').all(emailLower);
+            
+            // Delete sessions for all duplicate users
+            for (const u of duplicateUsers) {
+                db.prepare('DELETE FROM login_sessions WHERE user_id = ?').run(u.id);
+            }
+            
+            // Delete all users with the same email (case-insensitive)
+            db.prepare('DELETE FROM users WHERE LOWER(email) = ?').run(emailLower);
+        } else {
+            // Fallback: delete by id only
+            db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+        }
 
         res.json({ message: 'User deleted successfully' });
     } catch (error) {

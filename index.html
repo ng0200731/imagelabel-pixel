@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Image Library — Minimal Shell v1.1.0</title>
-  <link rel="stylesheet" href="styles.css?v=1.1.0&bust=20250910106000" />
+  <title>Image Library — Minimal Shell v1.2.0</title>
+  <link rel="stylesheet" href="styles.css?v=1.2.0&bust=20251218120000" />
 </head>
 <body>
   <div class="app">
@@ -27,7 +27,7 @@
       </nav>
 
       <div class="version-wrapper">
-          <span class="version" id="app-version">v1.1.0</span>
+          <span class="version" id="app-version">v1.2.0</span>
       </div>
 
       <div class="sidebar__footer">
@@ -80,6 +80,7 @@
                 <div id="autocomplete-dropdown" class="autocomplete-dropdown"></div>
               </div>
               <button id="clear-all-tags" class="button clear-tags-btn" type="button">Clear All</button>
+              <button id="tag-mode-toggle" class="button tag-mode-toggle-btn" type="button">OR</button>
             </div>
             <div id="library-search-chips" class="chips search-chips"></div>
             <button id="update-tag-btn" class="button update-tag-btn is-hidden" type="button">Update Tag</button>
@@ -833,7 +834,10 @@
     // Header title element for dynamic updates
     const libraryTitle = document.querySelector('#page-library .title');
     const clearAllTagsBtn = document.getElementById('clear-all-tags');
-    // Removed searchModeRadios - using default OR mode
+    const tagModeToggleBtn = document.getElementById('tag-mode-toggle');
+    
+    // Tag search mode: 'OR' (default) or 'AND'
+    let tagSearchMode = 'OR';
 
     // Selection and project elements
     const selectionControls = document.getElementById('selection-controls');
@@ -1868,9 +1872,10 @@
         console.log('displayLibraryImages called, selectedImages at start:', selectedImages.length);
         console.log('isPoolView at start:', isPoolView);
 
-        const searchMode = 'OR'; // Default to OR mode since radio buttons removed
+        const searchMode = tagSearchMode; // Use current tag search mode (OR or AND)
         const currentSearchTags = searchTags.map(tag => tag.text);
         console.log('currentSearchTags:', currentSearchTags);
+        console.log('searchMode:', searchMode);
 
         try {
             // Clear broken image tracking for new load
@@ -1963,9 +1968,24 @@
                 console.log('selectedImages after tag processing:', selectedImages);
                 console.log('tagSelectedImages after tag processing:', tagSelectedImages);
 
-                // Now combine ALL selections for pool view display
-                const allSelectedImageIds = [...new Set([...selectedImages, ...tagSelectedImages])];
-                console.log('allSelectedImageIds combined for pool view:', allSelectedImageIds);
+                // Now combine selections for pool view display, respecting AND/OR mode
+                let allSelectedImageIds;
+                if (searchMode === 'AND') {
+                    // AND mode: Only show images that match ALL tags (from tagMatchingImages)
+                    // Include manually selected images only if they also match ALL tags
+                    const currentTagsLower = currentSearchTags.map(t => t.toLowerCase());
+                    const manuallySelectedMatchingAll = selectedImages.filter(imgId => {
+                        const img = allImages.find(i => i.id === imgId);
+                        if (!img) return false;
+                        const imageTags = (img.tags || []).map(t => t.toLowerCase());
+                        return currentTagsLower.every(tag => imageTags.includes(tag));
+                    });
+                    allSelectedImageIds = [...new Set([...manuallySelectedMatchingAll, ...tagSelectedImages])];
+                } else {
+                    // OR mode: Show all selected images (manual + tag-selected)
+                    allSelectedImageIds = [...new Set([...selectedImages, ...tagSelectedImages])];
+                }
+                console.log('allSelectedImageIds combined for pool view (mode:', searchMode, '):', allSelectedImageIds);
                 imagesToDisplay = allImages.filter(img => allSelectedImageIds.includes(img.id));
 
                 // Group by tags since we have search tags active
@@ -2032,24 +2052,33 @@
                 console.log('selectedImages after tag processing:', selectedImages);
                 console.log('tagSelectedImages after tag processing:', tagSelectedImages);
 
-                // 1) Matching images: those that have at least one of the current search tags
-                const currentTagsLower = currentSearchTags.map(t => t.toLowerCase());
-                const matchingImages = allImages.filter(image => {
-                    const imageTags = (image.tags || []).map(t => t.toLowerCase());
-                    return imageTags.some(tag => currentTagsLower.includes(tag));
-                });
+                // 1) Use tagMatchingImages from API (already filtered by backend with correct mode)
+                // For AND mode: only show matching images. For OR mode: show matching first, then remaining
+                if (searchMode === 'AND') {
+                    // AND mode: ONLY show images that match ALL tags (from API)
+                    imagesToDisplay = tagMatchingImages;
+                    // Group matching images by tag order
+                    imagesToDisplay = groupImagesByTagsAndSort(imagesToDisplay);
+                } else {
+                    // OR mode: show matching images first, then remaining images
+                    const currentTagsLower = currentSearchTags.map(t => t.toLowerCase());
+                    const matchingImages = allImages.filter(image => {
+                        const imageTags = (image.tags || []).map(t => t.toLowerCase());
+                        return imageTags.some(tag => currentTagsLower.includes(tag));
+                    });
 
-                // Group matching images by tag order: #3 (first typed) first, then #2, then #1
-                const groupedMatchingImages = groupImagesByTagsAndSort(matchingImages);
+                    // Group matching images by tag order: #3 (first typed) first, then #2, then #1
+                    const groupedMatchingImages = groupImagesByTagsAndSort(matchingImages);
 
-                // 2) Remaining images: those that don't match any active search tag
-                const groupedIds = new Set(groupedMatchingImages.map(img => img.id));
-                const remainingImages = allImages
-                    .filter(img => !groupedIds.has(img.id))
-                    .sort((a, b) => b.id - a.id); // latest uploads first for the rest
+                    // 2) Remaining images: those that don't match any active search tag
+                    const groupedIds = new Set(groupedMatchingImages.map(img => img.id));
+                    const remainingImages = allImages
+                        .filter(img => !groupedIds.has(img.id))
+                        .sort((a, b) => b.id - a.id); // latest uploads first for the rest
 
-                // 3) Final sequence: all matching (grouped), then all remaining
-                imagesToDisplay = [...groupedMatchingImages, ...remainingImages];
+                    // 3) Final sequence: all matching (grouped), then all remaining
+                    imagesToDisplay = [...groupedMatchingImages, ...remainingImages];
+                }
 
                 console.log('Library view with search tags - matching images first, then others. Total:', imagesToDisplay.length);
             }
@@ -6509,6 +6538,28 @@
     clearAllTagsBtn.addEventListener('click', () => {
         showClearAllConfirmation();
     });
+
+    // Tag mode toggle button (AND/OR)
+    tagModeToggleBtn.addEventListener('click', () => {
+        // Toggle between AND and OR
+        tagSearchMode = tagSearchMode === 'OR' ? 'AND' : 'OR';
+        console.log('Tag search mode changed to:', tagSearchMode);
+        updateTagModeButtonText();
+        
+        // Refresh display immediately if there are search tags
+        if (searchTags.length > 0) {
+            console.log('Refreshing display with mode:', tagSearchMode, 'for tags:', searchTags.map(t => t.text));
+            displayLibraryImages();
+        }
+    });
+
+    // Function to update tag mode button text
+    function updateTagModeButtonText() {
+        tagModeToggleBtn.textContent = tagSearchMode;
+    }
+
+    // Initialize button text
+    updateTagModeButtonText();
 
     // Initialize button state
     updateClearButtonState();

@@ -1240,6 +1240,26 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
   color: #999;
 }
 
+.tag-mode-toggle-btn {
+  padding: 8px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+  background: #fff;
+  color: #000;
+  border: 1px solid #000;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: bold;
+  min-width: 50px;
+}
+
+.tag-mode-toggle-btn:hover,
+.tag-mode-toggle-btn:focus {
+  background: #000;
+  color: #fff;
+  outline: none;
+}
+
 .update-tag-btn {
   background: #4CAF50;
   color: white;
