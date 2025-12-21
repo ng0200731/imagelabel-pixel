@@ -1625,6 +1625,9 @@
             existingMessage.remove();
         }
         
+        // Track if any cards were added
+        let cardsAdded = 0;
+        
         if (shouldShowSelectedAtFront) {
             // First, display selected images at the front (in color, clickable)
             // Get selected images in their original order from loadedImages
@@ -1632,6 +1635,7 @@
             selectedImagesData.forEach(({ image, index, imageSrc }) => {
                 const card = createImageCard(image, index, imageSrc, currentSearchTags, false);
                 libraryGrid.appendChild(card);
+                cardsAdded++;
             });
         }
 
@@ -1644,10 +1648,12 @@
             }
             const card = createImageCard(image, index, imageSrc, currentSearchTags, false);
             libraryGrid.appendChild(card);
+            cardsAdded++;
         });
 
-        // Show message if no images to display (and not in pool view, which has its own message)
-        if (!isPoolView && loadedImages.length === 0 && currentPage === 0) {
+        // Show message if no images were added to the grid (and not in pool view, which has its own message)
+        // This covers cases like: no images loaded, OR mode with no matches, etc.
+        if (!isPoolView && cardsAdded === 0 && currentPage === 0) {
             const noImagesMessage = document.createElement('div');
             noImagesMessage.className = 'no-images-message';
             noImagesMessage.style.textAlign = 'center';
@@ -2033,7 +2039,13 @@
                     allSelectedImageIds = [...new Set([...selectedImages, ...tagSelectedImages])];
                 }
                 console.log('allSelectedImageIds combined for pool view (mode:', searchMode, '):', allSelectedImageIds);
-                imagesToDisplay = allImages.filter(img => allSelectedImageIds.includes(img.id));
+                
+                // If no images are selected, show empty grid with "No images to display." message
+                if (allSelectedImageIds.length === 0) {
+                    imagesToDisplay = [];
+                } else {
+                    imagesToDisplay = allImages.filter(img => allSelectedImageIds.includes(img.id));
+                }
 
                 // Group by tags since we have search tags active
                 imagesToDisplay = groupImagesByTagsAndSort(imagesToDisplay);
@@ -2101,35 +2113,43 @@
                 console.log('selectedImages after tag processing:', selectedImages);
                 console.log('tagSelectedImages after tag processing (mode:', searchMode, '):', tagSelectedImages);
 
-                // 1) Use tagMatchingImages from API (already filtered by backend with correct mode)
-                // For AND mode: only show matching images. For OR mode: show matching first, then remaining
-                if (searchMode === 'AND') {
-                    // AND mode: ONLY show images that match ALL tags (from API)
-                    imagesToDisplay = tagMatchingImages;
-                    // Group matching images by tag order
-                    imagesToDisplay = groupImagesByTagsAndSort(imagesToDisplay);
+                // Check if there are any selections (manual or tag-based)
+                const allSelectedImageIds = [...new Set([...selectedImages, ...tagSelectedImages])];
+                
+                // If no images are selected, show empty grid with "No images to display." message
+                if (allSelectedImageIds.length === 0) {
+                    imagesToDisplay = [];
+                    console.log('No images selected - showing empty grid');
                 } else {
-                    // OR mode: show matching images first, then remaining images
-                    const currentTagsLower = currentSearchTags.map(t => t.toLowerCase());
-                    const matchingImages = allImages.filter(image => {
-                        const imageTags = (image.tags || []).map(t => t.toLowerCase());
-                        return imageTags.some(tag => currentTagsLower.includes(tag));
-                    });
+                    // 1) Use tagMatchingImages from API (already filtered by backend with correct mode)
+                    // For AND mode: only show matching images. For OR mode: show matching first, then remaining
+                    if (searchMode === 'AND') {
+                        // AND mode: ONLY show images that match ALL tags (from API)
+                        imagesToDisplay = tagMatchingImages;
+                        // Group matching images by tag order
+                        imagesToDisplay = groupImagesByTagsAndSort(imagesToDisplay);
+                    } else {
+                        // OR mode: show matching images first, then remaining images
+                        const currentTagsLower = currentSearchTags.map(t => t.toLowerCase());
+                        const matchingImages = allImages.filter(image => {
+                            const imageTags = (image.tags || []).map(t => t.toLowerCase());
+                            return imageTags.some(tag => currentTagsLower.includes(tag));
+                        });
 
-                    // Group matching images by tag order: #3 (first typed) first, then #2, then #1
-                    const groupedMatchingImages = groupImagesByTagsAndSort(matchingImages);
+                        // Group matching images by tag order: #3 (first typed) first, then #2, then #1
+                        const groupedMatchingImages = groupImagesByTagsAndSort(matchingImages);
 
-                    // 2) Remaining images: those that don't match any active search tag
-                    const groupedIds = new Set(groupedMatchingImages.map(img => img.id));
-                    const remainingImages = allImages
-                        .filter(img => !groupedIds.has(img.id))
-                        .sort((a, b) => b.id - a.id); // latest uploads first for the rest
+                        // 2) Remaining images: those that don't match any active search tag
+                        const groupedIds = new Set(groupedMatchingImages.map(img => img.id));
+                        const remainingImages = allImages
+                            .filter(img => !groupedIds.has(img.id))
+                            .sort((a, b) => b.id - a.id); // latest uploads first for the rest
 
-                    // 3) Final sequence: all matching (grouped), then all remaining
-                    imagesToDisplay = [...groupedMatchingImages, ...remainingImages];
+                        // 3) Final sequence: all matching (grouped), then all remaining
+                        imagesToDisplay = [...groupedMatchingImages, ...remainingImages];
+                    }
+                    console.log('Library view with search tags - matching images first, then others. Total:', imagesToDisplay.length);
                 }
-
-                console.log('Library view with search tags - matching images first, then others. Total:', imagesToDisplay.length);
             }
 
             // Update header based on view type - check if we're showing selection pool
@@ -3569,10 +3589,10 @@
         const currentSearchTags = searchTags.map(tag => tag.text);
         const searchMode = tagSearchMode;
         
-        // In AND mode with active tags, filter manually selected images to only include those matching ALL tags
-        if (searchMode === 'AND' && currentSearchTags.length > 0) {
+        // When tags are active, verify selections match the current mode
+        if (currentSearchTags.length > 0) {
             try {
-                // Fetch all images to check which manually selected images match all tags
+                // Fetch all images to verify which manually selected images match the current mode
                 const sessionToken = localStorage.getItem('sessionToken');
                 const headers = {};
                 if (sessionToken) {
@@ -3582,22 +3602,34 @@
                 const allImages = allImagesResponse.ok ? await allImagesResponse.json() : [];
                 
                 const currentTagsLower = currentSearchTags.map(t => t.toLowerCase());
-                const manuallySelectedMatchingAll = selectedImages.filter(imgId => {
-                    const img = allImages.find(i => i.id === imgId);
-                    if (!img) return false;
-                    const imageTags = (img.tags || []).map(t => t.toLowerCase());
-                    return currentTagsLower.every(tag => imageTags.includes(tag));
-                });
+                let validManualSelections;
                 
-                // Combine filtered manual selections with tag-selected images
-                return [...new Set([...manuallySelectedMatchingAll, ...tagSelectedImages])].length;
+                if (searchMode === 'AND') {
+                    // AND mode: filter manually selected images to only include those matching ALL tags
+                    validManualSelections = selectedImages.filter(imgId => {
+                        const img = allImages.find(i => i.id === imgId);
+                        if (!img) return false;
+                        const imageTags = (img.tags || []).map(t => t.toLowerCase());
+                        return currentTagsLower.every(tag => imageTags.includes(tag));
+                    });
+                } else {
+                    // OR mode: all manually selected images count (no filtering by tags)
+                    // But we still verify the images exist
+                    validManualSelections = selectedImages.filter(imgId => {
+                        const img = allImages.find(i => i.id === imgId);
+                        return img !== undefined;
+                    });
+                }
+                
+                // Combine valid manual selections with tag-selected images
+                return [...new Set([...validManualSelections, ...tagSelectedImages])].length;
             } catch (error) {
-                console.error('Error fetching images for AND mode selection count:', error);
+                console.error('Error fetching images for selection count:', error);
                 // Fallback to simple count if fetch fails
                 return [...new Set([...selectedImages, ...tagSelectedImages])].length;
             }
         } else {
-            // OR mode or no tags: combine all selections
+            // No active tags: combine all selections (no filtering needed)
             return [...new Set([...selectedImages, ...tagSelectedImages])].length;
         }
     }
