@@ -960,7 +960,7 @@ app.delete('/images/:id', (req, res) => {
 // 7. Share Project via Email
 app.post('/projects/:id/share', async (req, res) => {
     const projectId = req.params.id;
-    const { recipient_email, message, breakdown_text, project_tags } = req.body;
+    const { recipient_email, message, breakdown_text, project_tags, search_mode } = req.body;
 
     if (!recipient_email) {
         return res.status(400).send('Recipient email is required');
@@ -1018,16 +1018,19 @@ app.post('/projects/:id/share', async (req, res) => {
         }
         
         console.log('[Share Email] Final projectTagsArray:', projectTagsArray);
+        console.log('[Share Email] Received search_mode:', search_mode);
         
         const projectData = {
             name: project.name,
             created_at: project.created_at,
             images: imagesWithTags,
             breakdown_text: breakdown_text,  // Pass the breakdown text from frontend
-            project_tags: projectTagsArray  // Pass project-level tags (e.g., ["clara"])
+            project_tags: projectTagsArray,  // Pass project-level tags (e.g., ["clara"])
+            search_mode: search_mode || 'OR'  // Pass search mode (OR/AND), default to OR
         };
         
         console.log('[Share Email] projectData.project_tags:', projectData.project_tags);
+        console.log('[Share Email] projectData.search_mode:', projectData.search_mode);
 
         // Send email
         const emailSent = await sendProjectEmail(projectData, recipient_email, message);

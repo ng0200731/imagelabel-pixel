@@ -280,24 +280,33 @@ function generateHtmlContent(projectData, senderMessage) {
     
     // Project Tags section (before Personal Message) - ALWAYS SHOW
     const projectTags = projectData.project_tags || [];
+    const searchMode = projectData.search_mode || 'OR';
     console.log('[Email HTML] ===== TAGS SECTION DEBUG =====');
     console.log('[Email HTML] Full projectData:', JSON.stringify(projectData, null, 2));
     console.log('[Email HTML] projectData.project_tags:', projectData.project_tags);
+    console.log('[Email HTML] projectData.search_mode:', searchMode);
     console.log('[Email HTML] projectTags:', projectTags);
     console.log('[Email HTML] isArray:', Array.isArray(projectTags));
     console.log('[Email HTML] length:', projectTags ? projectTags.length : 'N/A');
     
-    // ALWAYS show Tags section - no conditions, even if empty
-    const tagsDisplay = Array.isArray(projectTags) && projectTags.length > 0 
-        ? projectTags.map(tag => String(tag).toLowerCase()).join('<br>')
-        : (projectTags.length === 0 ? 'No tags' : 'No tags');
+    // Format tags with operator (OR/AND)
+    let tagsDisplay = 'No tags';
+    if (Array.isArray(projectTags) && projectTags.length > 0) {
+        const operator = searchMode.toUpperCase();
+        // Clean tags and join with operator
+        const cleanedTags = projectTags.map(tag => String(tag).trim().toLowerCase()).filter(tag => tag.length > 0);
+        if (cleanedTags.length > 0) {
+            tagsDisplay = cleanedTags.join(` ${operator} `);
+        }
+    }
     
     console.log('[Email HTML] tagsDisplay value:', tagsDisplay);
+    console.log('[Email HTML] searchMode used:', searchMode);
     
     html += `
         <div class="project-info">
             <h2>Tags:</h2>
-            <div style="padding: 8px; color: #333; font-size: 14px;">
+            <div style="padding: 8px; color: #333; font-size: 14px; white-space: nowrap;">
                 ${tagsDisplay}
             </div>
         </div>
