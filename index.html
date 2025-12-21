@@ -2957,12 +2957,21 @@
             if (index < chips.length - 1 && chips.length > 1) {
                 const separator = document.createElement('span');
                 separator.className = 'chip-separator';
-                separator.textContent = tagSearchMode; // 'OR' or 'AND'
+                separator.textContent = tagSearchMode.toLowerCase(); // 'or' or 'and' (text only, lowercase)
                 separator.style.margin = '0 8px';
-                separator.style.color = '#666';
-                separator.style.fontSize = '14px';
-                separator.style.fontWeight = '500';
+                separator.style.color = '#ffffff'; // White text
+                separator.style.backgroundColor = '#ff0000'; // Red circle background
+                separator.style.borderRadius = '50%'; // Make it circular
+                separator.style.width = '24px';
+                separator.style.height = '24px';
+                separator.style.display = 'inline-flex';
+                separator.style.alignItems = 'center'; // Vertical center alignment
+                separator.style.justifyContent = 'center'; // Horizontal center alignment
+                separator.style.fontSize = '12px';
+                separator.style.fontWeight = '600';
                 separator.style.userSelect = 'none';
+                separator.style.lineHeight = '1';
+                separator.style.textAlign = 'center'; // Ensure text is centered
                 
                 // Insert separator after the chip
                 chip.parentNode.insertBefore(separator, chip.nextSibling);
