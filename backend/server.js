@@ -960,7 +960,7 @@ app.delete('/images/:id', (req, res) => {
 // 7. Share Project via Email
 app.post('/projects/:id/share', async (req, res) => {
     const projectId = req.params.id;
-    const { recipient_email, message, breakdown_text } = req.body;
+    const { recipient_email, message, breakdown_text, project_tags } = req.body;
 
     if (!recipient_email) {
         return res.status(400).send('Recipient email is required');
@@ -1004,12 +1004,30 @@ app.post('/projects/:id/share', async (req, res) => {
             tags: img.tags ? img.tags.split(',') : []
         }));
 
+        console.log('[Share Email] Received project_tags:', project_tags);
+        console.log('[Share Email] project_tags type:', typeof project_tags);
+        console.log('[Share Email] project_tags is array:', Array.isArray(project_tags));
+        
+        // Ensure project_tags is always an array
+        let projectTagsArray = [];
+        if (Array.isArray(project_tags)) {
+            projectTagsArray = project_tags;
+        } else if (project_tags) {
+            // If it's a string or other type, convert to array
+            projectTagsArray = [project_tags];
+        }
+        
+        console.log('[Share Email] Final projectTagsArray:', projectTagsArray);
+        
         const projectData = {
             name: project.name,
             created_at: project.created_at,
             images: imagesWithTags,
-            breakdown_text: breakdown_text  // Pass the breakdown text from frontend
+            breakdown_text: breakdown_text,  // Pass the breakdown text from frontend
+            project_tags: projectTagsArray  // Pass project-level tags (e.g., ["clara"])
         };
+        
+        console.log('[Share Email] projectData.project_tags:', projectData.project_tags);
 
         // Send email
         const emailSent = await sendProjectEmail(projectData, recipient_email, message);

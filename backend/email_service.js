@@ -44,6 +44,9 @@ async function sendProjectEmail(projectData, recipientEmail, senderMessage = '')
     console.log('Project:', projectData.name);
     console.log('Recipient:', recipientEmail);
     console.log('Images count:', projectData.images ? projectData.images.length : 0);
+    console.log('Project tags:', projectData.project_tags);
+    console.log('Project tags type:', typeof projectData.project_tags);
+    console.log('Project tags length:', projectData.project_tags ? projectData.project_tags.length : 'N/A');
 
     try {
         // Try 163.com first (TESTED WORKING) since it's more reliable, then fallback to Gmail
@@ -215,6 +218,14 @@ async function createEmailOptions(projectData, recipientEmail, senderMessage, fr
  */
 function generateHtmlContent(projectData, senderMessage) {
     const currentTime = new Date().toLocaleString();
+    
+    // Debug logging for project tags
+    console.log('[generateHtmlContent] projectData.project_tags:', projectData.project_tags);
+    console.log('[generateHtmlContent] project_tags type:', typeof projectData.project_tags);
+    console.log('[generateHtmlContent] project_tags is array:', Array.isArray(projectData.project_tags));
+    if (projectData.project_tags) {
+        console.log('[generateHtmlContent] project_tags length:', projectData.project_tags.length);
+    }
 
     let html = `
     <!DOCTYPE html>
@@ -266,6 +277,34 @@ function generateHtmlContent(projectData, senderMessage) {
                 <p>Shared from Image Library System</p>
             </div>
     `;
+    
+    // Project Tags section (before Personal Message) - ALWAYS SHOW
+    const projectTags = projectData.project_tags || [];
+    console.log('[Email HTML] ===== TAGS SECTION DEBUG =====');
+    console.log('[Email HTML] Full projectData:', JSON.stringify(projectData, null, 2));
+    console.log('[Email HTML] projectData.project_tags:', projectData.project_tags);
+    console.log('[Email HTML] projectTags:', projectTags);
+    console.log('[Email HTML] isArray:', Array.isArray(projectTags));
+    console.log('[Email HTML] length:', projectTags ? projectTags.length : 'N/A');
+    
+    // ALWAYS show Tags section - no conditions, even if empty
+    const tagsDisplay = Array.isArray(projectTags) && projectTags.length > 0 
+        ? projectTags.map(tag => String(tag).toLowerCase()).join('<br>')
+        : (projectTags.length === 0 ? 'No tags' : 'No tags');
+    
+    console.log('[Email HTML] tagsDisplay value:', tagsDisplay);
+    
+    html += `
+        <div class="project-info">
+            <h2>Tags:</h2>
+            <div style="padding: 8px; color: #333; font-size: 14px;">
+                ${tagsDisplay}
+            </div>
+        </div>
+    `;
+    
+    console.log('[Email HTML] Tags section HTML added successfully');
+    console.log('[Email HTML] ===== END TAGS DEBUG =====');
     
     if (senderMessage) {
         html += `

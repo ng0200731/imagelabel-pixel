@@ -4678,6 +4678,15 @@
             if (response.ok) {
                 projects = await response.json();
                 console.log('Loaded projects from API:', projects.length);
+                
+                // Regenerate selection_breakdown for projects that don't have it
+                projects.forEach(project => {
+                    if (!project.selection_breakdown) {
+                        console.log(`Regenerating selection_breakdown for project ${project.id}`);
+                        project.selection_breakdown = generateBreakdownFromProject(project);
+                    }
+                });
+                
                 // Log first project structure to debug
                 if (projects.length > 0) {
                     console.log('Sample project structure:', JSON.stringify(projects[0], null, 2));
@@ -6201,17 +6210,41 @@
 
             const subjectiveTagsList = Array.from(allSubjectiveTags).sort();
 
+            // Extract project tags - use the SAME logic as project detail modal
+            let projectTagsList = [];
+            
+            // Ensure selection_breakdown exists (regenerate if missing)
+            if (project && !project.selection_breakdown) {
+                project.selection_breakdown = generateBreakdownFromProject(project);
+            }
+            
+            // Use EXACT same logic as showProjectDetailModal
+            if (project && project.selection_breakdown) {
+                if (project.selection_breakdown.searchTags && Array.isArray(project.selection_breakdown.searchTags) && project.selection_breakdown.searchTags.length > 0) {
+                    projectTagsList = project.selection_breakdown.searchTags;
+                } else if (project.selection_breakdown.tagCounts && typeof project.selection_breakdown.tagCounts === 'object') {
+                    const tagCountsKeys = Object.keys(project.selection_breakdown.tagCounts);
+                    if (tagCountsKeys.length > 0) {
+                        projectTagsList = tagCountsKeys;
+                    }
+                }
+            }
+            
+            console.log('Project tags for email:', projectTagsList);
+
             console.log('=== EMAIL SHARING ===');
             console.log('Project for email:', project);
             console.log('Breakdown text being sent:', breakdownText);
             console.log('Subjective tags only:', subjectiveTagsList);
+            console.log('Project tags:', projectTagsList);
 
             const emailData = {
                 recipient_email: email,
                 message: message,
                 breakdown_text: breakdownText,  // Send formatted breakdown to backend
                 include_only_feelings: true,  // Only show "Add feelings:" section, hide objective facts and tags
-                subjective_tags: subjectiveTagsList  // Send only subjective/feeling tags (e.g., "spider", "ghost spider", "clara")
+                subjective_tags: subjectiveTagsList,  // Send only subjective/feeling tags (e.g., "spider", "ghost spider", "clara")
+                project_tags: projectTagsList  // Send project-level tags (e.g., "clara")
             };
 
             console.log('Email data being sent to backend:', emailData);
