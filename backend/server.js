@@ -423,6 +423,10 @@ app.post('/feelings/usage/decrement', (req, res) => {
 app.get('/images', (req, res) => {
     const tags = req.query.tags ? req.query.tags.split(',').filter(t => t) : [];
     const mode = req.query.mode || 'OR';
+    const match = (req.query.match || 'exact').toLowerCase();
+    const isPartialMatch = match === 'partial';
+
+    console.log('[SEARCH] Tags:', tags, 'Mode:', mode, 'Match:', match, 'isPartialMatch:', isPartialMatch);
 
     // Get user from session for filtering
     const user = getUserFromSession(req);
@@ -449,48 +453,82 @@ app.get('/images', (req, res) => {
             let query;
             let params;
 
-            if (mode.toUpperCase() === 'AND') {
-                if (userLevel === 3) {
-                    query = `
-                        SELECT i.* FROM images i
-                        JOIN image_tags it ON i.id = it.image_id
-                        JOIN tags t ON it.tag_id = t.id
-                        WHERE t.name IN (${placeholders})
-                        GROUP BY i.id
-                        HAVING COUNT(DISTINCT t.name) = ?
-                    `;
-                    params = [...tags, tags.length];
-                } else {
-                    query = `
-                        SELECT i.* FROM images i
-                        JOIN image_tags it ON i.id = it.image_id
-                        JOIN tags t ON it.tag_id = t.id
-                        WHERE i.ownership = ? AND t.name IN (${placeholders})
-                        GROUP BY i.id
-                        HAVING COUNT(DISTINCT t.name) = ?
-                    `;
-                    params = [userEmail, ...tags, tags.length];
+            const upperMode = mode.toUpperCase();
+
+            if (!isPartialMatch) {
+                // Existing EXACT match behavior (t.name IN (...))
+                if (upperMode === 'AND') {
+                    if (userLevel === 3) {
+                        query = `
+                            SELECT i.* FROM images i
+                            JOIN image_tags it ON i.id = it.image_id
+                            JOIN tags t ON it.tag_id = t.id
+                            WHERE t.name IN (${placeholders}) AND INSTR(t.name, ':') = 0
+                            GROUP BY i.id
+                            HAVING COUNT(DISTINCT t.name) = ?
+                        `;
+                        params = [...tags, tags.length];
+                    } else {
+                        query = `
+                            SELECT i.* FROM images i
+                            JOIN image_tags it ON i.id = it.image_id
+                            JOIN tags t ON it.tag_id = t.id
+                            WHERE i.ownership = ? AND t.name IN (${placeholders}) AND INSTR(t.name, ':') = 0
+                            GROUP BY i.id
+                            HAVING COUNT(DISTINCT t.name) = ?
+                        `;
+                        params = [userEmail, ...tags, tags.length];
+                    }
+                } else { // OR, exact match
+                    if (userLevel === 3) {
+                        query = `
+                            SELECT DISTINCT i.* FROM images i
+                            JOIN image_tags it ON i.id = it.image_id
+                            JOIN tags t ON it.tag_id = t.id
+                            WHERE t.name IN (${placeholders}) AND INSTR(t.name, ':') = 0
+                        `;
+                        params = tags;
+                    } else {
+                        query = `
+                            SELECT DISTINCT i.* FROM images i
+                            JOIN image_tags it ON i.id = it.image_id
+                            JOIN tags t ON it.tag_id = t.id
+                            WHERE i.ownership = ? AND t.name IN (${placeholders}) AND INSTR(t.name, ':') = 0
+                        `;
+                        params = [userEmail, ...tags];
+                    }
                 }
-            } else { // OR
+            } else {
+                // PARTIAL match behavior using LIKE and post-filter for AND
+                const tagsLower = tags.map(t => t.toLowerCase());
+                const likePlaceholders = tagsLower.map(() => 'LOWER(t.name) LIKE ?').join(' OR ');
+                const likeParams = tagsLower.map(t => `%${t}%`);
+
+                console.log('[SEARCH] Partial match - tagsLower:', tagsLower, 'likeParams:', likeParams);
+
                 if (userLevel === 3) {
                     query = `
                         SELECT DISTINCT i.* FROM images i
                         JOIN image_tags it ON i.id = it.image_id
                         JOIN tags t ON it.tag_id = t.id
-                        WHERE t.name IN (${placeholders})
+                        WHERE (${likePlaceholders}) AND INSTR(t.name, ':') = 0
                     `;
-                    params = tags;
+                    params = likeParams;
                 } else {
                     query = `
                         SELECT DISTINCT i.* FROM images i
                         JOIN image_tags it ON i.id = it.image_id
                         JOIN tags t ON it.tag_id = t.id
-                        WHERE i.ownership = ? AND t.name IN (${placeholders})
+                        WHERE i.ownership = ? AND (${likePlaceholders}) AND INSTR(t.name, ':') = 0
                     `;
-                    params = [userEmail, ...tags];
+                    params = [userEmail, ...likeParams];
                 }
             }
+
+            console.log('[SEARCH] Query:', query);
+            console.log('[SEARCH] Params:', params);
             images = db.prepare(query).all(params);
+            console.log('[SEARCH] Found', images.length, 'images');
         }
 
         // Get tags for each image
@@ -500,13 +538,24 @@ app.get('/images', (req, res) => {
             WHERE it.image_id = ?
         `);
 
-        const imagesWithTags = images.map(image => {
+        let imagesWithTags = images.map(image => {
             const imageTags = getImageTags.all(image.id);
             return {
                 ...image,
                 tags: imageTags.map(tag => tag.name)
             };
         });
+
+        // For partial + AND mode, ensure each image matches ALL search tags as substrings
+        if (isPartialMatch && mode.toUpperCase() === 'AND' && tags.length > 0) {
+            const tagsLower = tags.map(t => t.toLowerCase());
+            imagesWithTags = imagesWithTags.filter(image => {
+                const imageTagsLower = (image.tags || []).map(t => t.toLowerCase());
+                return tagsLower.every(searchTag =>
+                    imageTagsLower.some(tagName => tagName.includes(searchTag))
+                );
+            });
+        }
 
         res.json(imagesWithTags);
     } catch (err) {
@@ -522,21 +571,22 @@ app.get('/tags', (req, res) => {
         let tags;
 
         if (query) {
-            // Search for tags that contain the query string
+            // Search for SUBJECTIVE tags (no colon) that contain the query string
             tags = db.prepare(`
                 SELECT name, COUNT(it.image_id) as usage_count
                 FROM tags t
                 LEFT JOIN image_tags it ON t.id = it.tag_id
-                WHERE LOWER(t.name) LIKE ?
+                WHERE LOWER(t.name) LIKE ? AND INSTR(t.name, ':') = 0
                 GROUP BY t.id, t.name
                 ORDER BY usage_count DESC, t.name ASC
             `).all(`%${query}%`);
         } else {
-            // Get all tags with usage count
+            // Get all SUBJECTIVE tags (no colon) with usage count
             tags = db.prepare(`
                 SELECT name, COUNT(it.image_id) as usage_count
                 FROM tags t
                 LEFT JOIN image_tags it ON t.id = it.tag_id
+                WHERE INSTR(t.name, ':') = 0
                 GROUP BY t.id, t.name
                 ORDER BY usage_count DESC, t.name ASC
             `).all();

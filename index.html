@@ -81,6 +81,7 @@
               </div>
               <button id="clear-all-tags" class="button clear-tags-btn" type="button">Clear All</button>
               <button id="tag-mode-toggle" class="button tag-mode-toggle-btn" type="button">OR</button>
+              <button id="exact-word-toggle" class="button exact-word-toggle-btn" type="button">EXACT WORD</button>
             </div>
             <div id="library-search-chips" class="chips search-chips"></div>
             <button id="update-tag-btn" class="button update-tag-btn is-hidden" type="button">Update Tag</button>
@@ -854,9 +855,12 @@
     const libraryTitle = document.querySelector('#page-library .title');
     const clearAllTagsBtn = document.getElementById('clear-all-tags');
     const tagModeToggleBtn = document.getElementById('tag-mode-toggle');
+    const exactWordToggleBtn = document.getElementById('exact-word-toggle');
     
     // Tag search mode: 'OR' (default) or 'AND'
     let tagSearchMode = 'OR';
+    // Tag match mode: exact word or partial/substring (default: partial for better search experience)
+    let exactWordMode = false;
 
     // Selection and project elements
     const selectionControls = document.getElementById('selection-controls');
@@ -1045,7 +1049,13 @@
             const normalizedTag = tag.toLowerCase();
             const imagesWithThisTag = images.filter(image => {
                 const imageTags = image.tags || [];
-                return imageTags.some(t => t.toLowerCase() === normalizedTag);
+                return imageTags.some(t => {
+                    const imageTagLower = t.toLowerCase();
+                    // In exact mode, require full match; otherwise allow partial/substring match
+                    return exactWordMode
+                        ? imageTagLower === normalizedTag
+                        : imageTagLower.includes(normalizedTag);
+                });
             });
 
             // Sort images within this tag group by upload time (earliest first)
@@ -2165,6 +2175,15 @@
                 console.log('=== POOL VIEW LOGIC (WITH SEARCH TAGS) ===');
                 console.log('Processing tags first, then combining with existing selections');
 
+                // Sync exactWordMode with button state before searching
+                if (exactWordToggleBtn) {
+                    const buttonIsActive = exactWordToggleBtn.classList.contains('is-active');
+                    if (exactWordMode !== buttonIsActive) {
+                        console.warn('[FRONTEND] exactWordMode variable out of sync with button! Variable:', exactWordMode, 'Button:', buttonIsActive, '- syncing...');
+                        exactWordMode = buttonIsActive;
+                    }
+                }
+
                 // First, process the search tags to get tag-matching images
                 console.log('Fetching tag-matching images for tags:', currentSearchTags);
                 const sessionToken = localStorage.getItem('sessionToken');
@@ -2172,7 +2191,9 @@
                 if (sessionToken) {
                     headers['Authorization'] = `Bearer ${sessionToken}`;
                 }
-                const tagResponse = await fetch(`${API_URL}/images?tags=${currentSearchTags.join(',')}&mode=${searchMode}`, {
+                const matchMode = exactWordMode ? 'exact' : 'partial';
+                console.log('[FRONTEND POOL] Searching with tags:', currentSearchTags, 'mode:', searchMode, 'matchMode:', matchMode, 'exactWordMode:', exactWordMode);
+                const tagResponse = await fetch(`${API_URL}/images?tags=${currentSearchTags.join(',')}&mode=${searchMode}&match=${matchMode}`, {
                     headers: headers
                 });
 
@@ -2260,18 +2281,25 @@
 
                 console.log('Library view with no active tags, sorted latest first, preserving tagSelectedImages:', tagSelectedImages.length);
             } else {
-                // Library view with search tags - show ALL images in the library,
-                // but put matching images first, grouped by tag order (#3, then #2, then #1).
-                console.log('=== LIBRARY VIEW WITH SEARCH TAGS (SHOW ALL IMAGES, GROUP MATCHES FIRST) ===');
+                // Library view with search tags (NOT pool view):
+                // Delegate matching to backend, which already filters to subjective tags only
+                console.log('=== LIBRARY VIEW WITH SEARCH TAGS (BACKEND FILTER) ===');
 
-                // We still fetch tag-matching images to update tag selection metadata.
-                console.log('Fetching tag-matching images for tags (for selection metadata and ordering):', currentSearchTags);
                 const sessionToken2 = localStorage.getItem('sessionToken');
                 const headers2 = {};
                 if (sessionToken2) {
                     headers2['Authorization'] = `Bearer ${sessionToken2}`;
                 }
-                const tagResponse = await fetch(`${API_URL}/images?tags=${currentSearchTags.join(',')}&mode=${searchMode}`, {
+
+                // exactWordMode:
+                //   true  -> match=exact   (full word)
+                //   false -> match=partial (substring, e.g. "ost" matches "ghost spider")
+                const matchMode = exactWordMode ? 'exact' : 'partial';
+
+                console.log('[FRONTEND] Searching with tags:', currentSearchTags, 'mode:', searchMode, 'matchMode:', matchMode, 'exactWordMode:', exactWordMode);
+                console.log('[FRONTEND] Button state check - has is-active:', exactWordToggleBtn ? exactWordToggleBtn.classList.contains('is-active') : 'button not found');
+
+                const tagResponse = await fetch(`${API_URL}/images?tags=${currentSearchTags.join(',')}&mode=${searchMode}&match=${matchMode}`, {
                     headers: headers2
                 });
 
@@ -2280,74 +2308,12 @@
                 }
 
                 const tagMatchingImages = await tagResponse.json();
-                console.log('Tag-matching images found:', tagMatchingImages.length);
+                console.log('Tag-matching images from backend (subjective only) found:', tagMatchingImages.length);
 
-                // Update tag-selected images (add new ones, keep existing ones)
-                const newTagSelectedImages = tagMatchingImages.map(img => img.id);
-                console.log('newTagSelectedImages from tags:', newTagSelectedImages);
-                console.log('selectedImages before tag processing:', selectedImages);
-                console.log('tagSelectedImages before tag processing:', tagSelectedImages);
-                const currentTimestamp = Date.now();
-
-                // Track how each image was selected - attribute to the current search operation
-                const searchTagsString = currentSearchTags.join(','); // Unique identifier for this search
-                tagMatchingImages.forEach(image => {
-                    if (!imageSelectionSource[image.id]) {
-                        imageSelectionSource[image.id] = searchTagsString;
-                    }
-                });
-
-                // Track selection timestamps for new tag-selected images
-                newTagSelectedImages.forEach(imageId => {
-                    if (!tagSelectedImages.includes(imageId)) {
-                        imageSelectionOrder[imageId] = currentTimestamp;
-                    }
-                });
-
-                // When mode changes, replace tagSelectedImages with new results (don't merge)
-                // This ensures AND mode shows only images matching ALL tags, OR mode shows images matching ANY tag
-                tagSelectedImages = newTagSelectedImages;
-
-                console.log('selectedImages after tag processing:', selectedImages);
-                console.log('tagSelectedImages after tag processing (mode:', searchMode, '):', tagSelectedImages);
-
-                // Check if there are any selections (manual or tag-based)
-                const allSelectedImageIds = [...new Set([...selectedImages, ...tagSelectedImages])];
-                
-                // If no images are selected, show empty grid with "No images to display." message
-                if (allSelectedImageIds.length === 0) {
-                    imagesToDisplay = [];
-                    console.log('No images selected - showing empty grid');
-                } else {
-                    // 1) Use tagMatchingImages from API (already filtered by backend with correct mode)
-                    // For AND mode: only show matching images. For OR mode: show matching first, then remaining
-                    if (searchMode === 'AND') {
-                        // AND mode: ONLY show images that match ALL tags (from API)
-                        imagesToDisplay = tagMatchingImages;
-                        // Group matching images by tag order
-                        imagesToDisplay = groupImagesByTagsAndSort(imagesToDisplay);
-                    } else {
-                        // OR mode: show matching images first, then remaining images
-                        const currentTagsLower = currentSearchTags.map(t => t.toLowerCase());
-                        const matchingImages = allImages.filter(image => {
-                            const imageTags = (image.tags || []).map(t => t.toLowerCase());
-                            return imageTags.some(tag => currentTagsLower.includes(tag));
-                        });
-
-                        // Group matching images by tag order: #3 (first typed) first, then #2, then #1
-                        const groupedMatchingImages = groupImagesByTagsAndSort(matchingImages);
-
-                        // 2) Remaining images: those that don't match any active search tag
-                        const groupedIds = new Set(groupedMatchingImages.map(img => img.id));
-                        const remainingImages = allImages
-                            .filter(img => !groupedIds.has(img.id))
-                            .sort((a, b) => b.id - a.id); // latest uploads first for the rest
-
-                        // 3) Final sequence: all matching (grouped), then all remaining
-                        imagesToDisplay = [...groupedMatchingImages, ...remainingImages];
-                    }
-                    console.log('Library view with search tags - matching images first, then others. Total:', imagesToDisplay.length);
-                }
+                // For both OR & AND mode in library view, simply show the backend result.
+                // (Backend already handles AND/OR logic and subjective tag filtering.)
+                imagesToDisplay = tagMatchingImages.slice().sort((a, b) => b.id - a.id);
+                console.log('Library view with search tags - displaying backend results only. Total:', imagesToDisplay.length);
             }
 
             // Update header based on view type - check if we're showing selection pool
@@ -2528,12 +2494,32 @@
                 if (sessionToken) {
                     headers['Authorization'] = `Bearer ${sessionToken}`;
                 }
-                const response = await fetch(`${API_URL}/images?tags=${tagText}&mode=OR`, {
-                    headers: headers
-                });
-                const images = await response.json();
-                const hasMatches = images.length > 0;
-                const imageCount = images.length;
+
+                let hasMatches = false;
+                let imageCount = 0;
+
+                if (exactWordMode) {
+                    // Exact mode: ask backend for exact tag matches (subjective tags only)
+                    const response = await fetch(`${API_URL}/images?tags=${tagText}&mode=OR&match=exact`, {
+                        headers: headers
+                    });
+                    const images = await response.json();
+                    imageCount = images.length;
+                    hasMatches = imageCount > 0;
+                } else {
+                    // Partial mode: fetch all visible images for this user and count via substring match
+                    const allImagesResponse = await fetch(`${API_URL}/images`, { headers });
+                    const allImages = allImagesResponse.ok ? await allImagesResponse.json() : [];
+                    const searchLower = tagText.toLowerCase();
+                    const matchingImages = allImages.filter(img =>
+                        (img.tags || [])
+                            // Only consider subjective/feeling tags (no colon prefix)
+                            .filter(t => typeof t === 'string' && !t.includes(':'))
+                            .some(t => t.toLowerCase().includes(searchLower))
+                    );
+                    imageCount = matchingImages.length;
+                    hasMatches = imageCount > 0;
+                }
 
                 // Update the chip color and count based on matches
                 const chip = Array.from(librarySearchChips.querySelectorAll('.search-chip')).find(
@@ -3112,11 +3098,27 @@
             if (sessionToken) {
                 headers['Authorization'] = `Bearer ${sessionToken}`;
             }
-            const response = await fetch(`${API_URL}/images?tags=${text}&mode=OR`, {
-                headers: headers
-            });
-            const images = await response.json();
-            imageCount = images.length;
+
+            if (exactWordMode) {
+                // Exact mode: ask backend for exact tag matches (subjective tags only)
+                const response = await fetch(`${API_URL}/images?tags=${text}&mode=OR&match=exact`, {
+                    headers: headers
+                });
+                const images = await response.json();
+                imageCount = images.length;
+            } else {
+                // Partial mode: fetch all visible images and count via substring match
+                const allImagesResponse = await fetch(`${API_URL}/images`, { headers });
+                const allImages = allImagesResponse.ok ? await allImagesResponse.json() : [];
+                const searchLower = text.toLowerCase();
+                const matchingImages = allImages.filter(img =>
+                    (img.tags || [])
+                        // Only consider subjective/feeling tags (no colon prefix)
+                        .filter(t => typeof t === 'string' && !t.includes(':'))
+                        .some(t => t.toLowerCase().includes(searchLower))
+                );
+                imageCount = matchingImages.length;
+            }
         } catch (error) {
             console.error(`Error getting count for tag "${text}":`, error);
         }
@@ -3487,11 +3489,18 @@
             return [];
         }
 
-        // Return tags that are both in the image and in the search
-        return imageTags.filter(imageTag =>
-            searchTags.some(searchTag =>
-                searchTag.toLowerCase() === imageTag.toLowerCase()
-            )
+        // Only consider subjective/feeling tags (no colon prefix), and respect exact/partial mode
+        const subjectiveTags = imageTags.filter(t => typeof t === 'string' && !t.includes(':'));
+
+        return subjectiveTags.filter(imageTag =>
+            searchTags.some(searchTag => {
+                const imageTagLower = imageTag.toLowerCase();
+                const searchLower = searchTag.toLowerCase();
+                if (!searchLower) return false;
+                return exactWordMode
+                    ? imageTagLower === searchLower
+                    : imageTagLower.includes(searchLower);
+            })
         );
     }
 
@@ -3525,8 +3534,14 @@
 
             // Highlight if it matches current search
             const currentSearchTags = searchTags.map(tag => tag.text);
-            if (currentSearchTags.some(searchTag =>
-                searchTag.toLowerCase() === tagText.toLowerCase())) {
+            if (currentSearchTags.some(searchTag => {
+                const tagLower = tagText.toLowerCase();
+                const searchLower = searchTag.toLowerCase();
+                if (!searchLower) return false;
+                return exactWordMode
+                    ? tagLower === searchLower
+                    : tagLower.includes(searchLower);
+            })) {
                 chip.classList.add('highlighted');
             }
 
@@ -3818,7 +3833,15 @@
                         const img = allImages.find(i => i.id === imgId);
                         if (!img) return false;
                         const imageTags = (img.tags || []).map(t => t.toLowerCase());
-                        return currentTagsLower.every(tag => imageTags.includes(tag));
+                        if (exactWordMode) {
+                            // Exact word mode: each search tag must be present exactly
+                            return currentTagsLower.every(tag => imageTags.includes(tag));
+                        } else {
+                            // Partial mode: each search tag must match at least one image tag as a substring
+                            return currentTagsLower.every(tag =>
+                                imageTags.some(imageTag => imageTag.includes(tag))
+                            );
+                        }
                     });
                 } else {
                     // OR mode: all manually selected images count (no filtering by tags)
@@ -5671,10 +5694,18 @@
     }
 
     function selectHighlightedItem() {
+        // Only select an item if one is explicitly highlighted with arrow keys.
+        // If nothing is highlighted, pressing Enter/Tab should *not* replace
+        // the user's typed text (e.g. "OST") with a suggestion like "ghost spider".
+        if (!autocompleteVisible || autocompleteItems.length === 0) {
+            return false;
+        }
+
         if (autocompleteHighlightIndex >= 0 && autocompleteHighlightIndex < autocompleteItems.length) {
             selectAutocompleteItem(autocompleteItems[autocompleteHighlightIndex].name);
             return true;
         }
+
         return false;
     }
 
@@ -7303,6 +7334,45 @@
         await showClearAllConfirmation();
     });
 
+    // Exact word toggle button (exact vs partial tag matching)
+    function updateExactWordButtonState() {
+        if (!exactWordToggleBtn) return;
+        if (exactWordMode) {
+            exactWordToggleBtn.classList.add('is-active');
+            exactWordToggleBtn.title = 'Exact word match is ON';
+        } else {
+            exactWordToggleBtn.classList.remove('is-active');
+            exactWordToggleBtn.title = 'Exact word match is OFF (partial match)';
+        }
+    }
+
+    if (exactWordToggleBtn) {
+        exactWordToggleBtn.addEventListener('click', () => {
+            exactWordMode = !exactWordMode;
+            console.log('=== EXACT WORD BUTTON CLICKED ===');
+            console.log('exactWordMode changed to:', exactWordMode ? 'EXACT' : 'PARTIAL');
+            console.log('Button has is-active class:', exactWordToggleBtn.classList.contains('is-active'));
+            updateExactWordButtonState();
+            console.log('After updateExactWordButtonState - Button has is-active class:', exactWordToggleBtn.classList.contains('is-active'));
+            console.log('=== END BUTTON CLICK ===');
+
+            // Recalculate chip colors/counts to reflect new match mode
+            const currentTags = searchTags.map(t => t.text);
+            if (currentTags.length > 0) {
+                updateTagChipColors(currentTags, tagSearchMode);
+            }
+
+            // When match mode changes, refresh the display if tags are active or in pool view
+            if (searchTags.length > 0 || isPoolView) {
+                displayLibraryImages().then(() => {
+                    updateSelectionState();
+                });
+            } else {
+                updateSelectionState();
+            }
+        });
+    }
+
     // Tag mode toggle button (AND/OR)
     tagModeToggleBtn.addEventListener('click', () => {
         // Toggle between AND and OR
@@ -7339,6 +7409,9 @@
 
     // Initialize button text
     updateTagModeButtonText();
+
+    // Initialize exact word button state (default: inactive / partial matches)
+    updateExactWordButtonState();
 
     // Initialize button state
     updateClearButtonState();
