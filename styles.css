@@ -157,13 +157,6 @@ body {
   color: #fff;
 }
 
-/* Exact word toggle: keep "active" styling even when it loses focus */
-.exact-word-toggle-btn.is-active {
-  background: #000;
-  color: #fff;
-}
-
-
 .page.is-hidden {
   display: none !important;
 }
@@ -1271,8 +1264,8 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
   padding: 8px 12px;
   font-size: 12px;
   white-space: nowrap;
-  background: #fff;
-  color: #000;
+  background: #fff !important; /* White background for non-active state */
+  color: #000 !important; /* Black text for non-active state */
   border: 1px solid #000;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1280,17 +1273,37 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
   min-width: 80px; /* slightly wider to fit text */
 }
 
-.exact-word-toggle-btn:hover,
-.exact-word-toggle-btn:focus {
-  background: #000;
-  color: #fff;
-  outline: none;
+/* Non-active state - explicitly white background, black text (even when focused) */
+.exact-word-toggle-btn:not(.is-active) {
+  background: #fff !important;
+  color: #000 !important;
 }
 
-/* Exact word toggle: keep "active" styling even when it loses focus */
+/* Override global button focus for non-active exact word button */
+.exact-word-toggle-btn:not(.is-active):focus {
+  background: #fff !important;
+  color: #000 !important;
+  outline: 1px dotted #000;
+  outline-offset: 1px;
+}
+
+/* Hover state for non-active button (only on hover, not focus) */
+.exact-word-toggle-btn:not(.is-active):hover {
+  background: #000 !important;
+  color: #fff !important;
+}
+
+/* Active state - black background, white text */
 .exact-word-toggle-btn.is-active {
-  background: #000;
-  color: #fff;
+  background: #000 !important;
+  color: #fff !important;
+}
+
+/* Ensure active state persists even on hover and focus */
+.exact-word-toggle-btn.is-active:hover,
+.exact-word-toggle-btn.is-active:focus {
+  background: #000 !important;
+  color: #fff !important;
 }
 
 .update-tag-btn {
