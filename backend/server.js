@@ -1233,7 +1233,7 @@ app.get('/auth/verify-session', async (req, res) => {
 
     try {
         const session = db.prepare(`
-            SELECT s.*, u.email, u.role, u.status
+            SELECT s.*, u.email, u.role, u.status, COALESCE(u.level, 1) as level
             FROM login_sessions s
             JOIN users u ON s.user_id = u.id
             WHERE s.session_token = ? AND s.expires_at > datetime('now')
@@ -1248,7 +1248,8 @@ app.get('/auth/verify-session', async (req, res) => {
                 id: session.user_id,
                 email: session.email,
                 role: session.role,
-                status: session.status
+                status: session.status,
+                level: parseInt(session.level) || 1
             }
         });
 

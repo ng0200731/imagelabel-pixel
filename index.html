@@ -5702,17 +5702,34 @@
             currentUser = result.user;
 
             // Get user level (default to 1 if not set)
-            const userLevel = parseInt(currentUser.level, 10) || 1;
-            console.log('User level check:', { level: currentUser.level, parsedLevel: userLevel, role: currentUser.role });
+            // Handle both string and number formats
+            let userLevel = 1;
+            if (currentUser.level !== undefined && currentUser.level !== null) {
+                userLevel = parseInt(currentUser.level, 10);
+                if (isNaN(userLevel)) {
+                    userLevel = 1;
+                }
+            }
+            console.log('=== USER LEVEL CHECK ===');
+            console.log('Raw level value:', currentUser.level);
+            console.log('Parsed level:', userLevel);
+            console.log('Level type:', typeof currentUser.level);
+            console.log('User role:', currentUser.role);
+            console.log('User email:', currentUser.email);
+            console.log('Is level 3?', (userLevel === 3));
+            console.log('Full currentUser object:', JSON.stringify(currentUser, null, 2));
+            console.log('========================');
 
             // Get navigation elements
             const adminLink = document.getElementById('nav-admin');
             const settingsLink = document.getElementById('nav-settings');
             const tagsLink = document.getElementById('nav-tags');
 
-            // Level-based visibility: Level 1 users can only see Image Library, Upload Image, and Project
-            // This check takes priority over admin role
-            if (userLevel === 1) {
+            // Level-based visibility:
+            // Level 1: Only Image Library, Upload Image, and Project
+            // Level 2: Image Library, Upload Image, Project, Tags (Admin/Settings based on admin role)
+            // Level 3: All menu items (full access)
+            if (userLevel === 1 || userLevel === '1') {
                 console.log('Level 1 user detected - hiding Tags, Admin Panel, and Settings');
                 // Hide Tags, Admin Panel, and Settings for level 1 users (regardless of admin role)
                 if (tagsLink) {
@@ -5727,8 +5744,40 @@
                     settingsLink.classList.add('is-hidden');
                     settingsLink.style.display = 'none';
                 }
+            } else if (userLevel === 3) {
+                console.log('Level 3 user detected - showing all menu items');
+                console.log('Elements found:', { tagsLink: !!tagsLink, adminLink: !!adminLink, settingsLink: !!settingsLink });
+                // Level 3 users can see all menu items regardless of admin role
+                // Force visibility using both class removal and inline style
+                if (tagsLink) {
+                    tagsLink.classList.remove('is-hidden');
+                    tagsLink.style.setProperty('display', 'block', 'important');
+                    tagsLink.style.setProperty('visibility', 'visible', 'important');
+                    tagsLink.style.setProperty('opacity', '1', 'important');
+                    console.log('Tags link - removed is-hidden, forced display to block');
+                } else {
+                    console.error('Tags link not found!');
+                }
+                if (adminLink) {
+                    adminLink.classList.remove('is-hidden');
+                    adminLink.style.setProperty('display', 'block', 'important');
+                    adminLink.style.setProperty('visibility', 'visible', 'important');
+                    adminLink.style.setProperty('opacity', '1', 'important');
+                    console.log('Admin link - removed is-hidden, forced display to block');
+                } else {
+                    console.error('Admin link not found!');
+                }
+                if (settingsLink) {
+                    settingsLink.classList.remove('is-hidden');
+                    settingsLink.style.setProperty('display', 'block', 'important');
+                    settingsLink.style.setProperty('visibility', 'visible', 'important');
+                    settingsLink.style.setProperty('opacity', '1', 'important');
+                    console.log('Settings link - removed is-hidden, forced display to block');
+                } else {
+                    console.error('Settings link not found!');
+                }
             } else {
-                // Level 2+ users: Show/hide based on admin role
+                // Level 2 users: Show Tags, Admin/Settings based on admin role
                 if (currentUser.role === 'admin') {
                     if (adminLink) {
                         adminLink.classList.remove('is-hidden');
@@ -5748,7 +5797,7 @@
                         settingsLink.style.display = 'none';
                     }
                 }
-                // Show Tags for level 2+ users
+                // Show Tags for level 2 users
                 if (tagsLink) {
                     tagsLink.classList.remove('is-hidden');
                     tagsLink.style.display = '';
@@ -5777,10 +5826,12 @@
         ];
 
         const email = currentUser ? currentUser.email : '';
+        const userLevel = currentUser ? (parseInt(currentUser.level, 10) || 1) : 1;
+        const displayText = email ? `${email} (level ${userLevel})` : '';
         
         emailDisplays.forEach(display => {
             if (display) {
-                display.textContent = email;
+                display.textContent = displayText;
                 display.style.display = email ? 'block' : 'none';
             }
         });
@@ -7661,6 +7712,263 @@
             shareProject();
         }
     });
+
+    // Helper function to set user level by email (for admin use in console)
+    // Usage: setUserLevelByEmail('eric.brilliant@gmail.com', 3)
+    async function setUserLevelByEmail(email, level) {
+        const sessionToken = localStorage.getItem('sessionToken');
+        if (!sessionToken) {
+            console.error('No session token found. Please log in first.');
+            return;
+        }
+
+        if (!currentUser || currentUser.role !== 'admin') {
+            console.error('Admin access required. Please log in as admin.');
+            return;
+        }
+
+        if (!email || !level || level < 1 || level > 3) {
+            console.error('Invalid parameters. Usage: setUserLevelByEmail(email, level) where level is 1, 2, or 3');
+            return;
+        }
+
+        try {
+            // First, get all users to find the user ID
+            console.log(`Finding user: ${email}...`);
+            const usersResponse = await fetch(`${API_URL}/admin/users`, {
+                headers: { 'Authorization': `Bearer ${sessionToken}` }
+            });
+
+            if (!usersResponse.ok) {
+                throw new Error('Failed to fetch users');
+            }
+
+            const users = await usersResponse.json();
+            const user = users.find(u => u.email === email);
+
+            if (!user) {
+                console.error(`User with email "${email}" not found.`);
+                return;
+            }
+
+            console.log(`Found user: ${email} (ID: ${user.id}). Current level: ${user.level}. Updating to level ${level}...`);
+
+            // Update the user's level
+            const updateResponse = await fetch(`${API_URL}/admin/users/${user.id}/level`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${sessionToken}`
+                },
+                body: JSON.stringify({ level: level })
+            });
+
+            if (!updateResponse.ok) {
+                const errorText = await updateResponse.text();
+                console.error('Update failed:', updateResponse.status, errorText);
+                throw new Error(`Failed to update user level: ${updateResponse.status}`);
+            }
+
+            const updateResult = await updateResponse.json().catch(() => ({}));
+            console.log('Update response:', updateResult);
+            console.log(`✅ Successfully updated ${email} to Level ${level}`);
+            
+            // Verify the update by fetching users again
+            try {
+                const verifyResponse = await fetch(`${API_URL}/admin/users`, {
+                    headers: { 'Authorization': `Bearer ${sessionToken}` }
+                });
+                if (verifyResponse.ok) {
+                    const updatedUsers = await verifyResponse.json();
+                    const updatedUser = updatedUsers.find(u => u.email === email);
+                    if (updatedUser) {
+                        console.log(`✅ Verified in database: ${email} is now Level ${updatedUser.level}`);
+                    } else {
+                        console.warn('Could not verify update - user not found in list');
+                    }
+                }
+            } catch (verifyErr) {
+                console.warn('Could not verify update:', verifyErr);
+            }
+            
+            // If the updated user is the current logged-in user, refresh their session
+            if (currentUser && currentUser.email === email) {
+                console.log('⚠️ Updated current user - refreshing session...');
+                const refreshed = await checkAuthentication();
+                if (refreshed) {
+                    console.log(`✅ Session refreshed. Current user level is now: ${currentUser.level}`);
+                    console.log('Full currentUser object:', JSON.stringify(currentUser, null, 2));
+                } else {
+                    console.error('Failed to refresh session');
+                }
+            }
+            
+            // Reload admin users if on admin page
+            if (document.getElementById('page-admin') && !document.getElementById('page-admin').classList.contains('is-hidden')) {
+                loadAdminUsers();
+            }
+        } catch (err) {
+            console.error('Error updating user level:', err);
+        }
+    }
+
+    // Helper function to refresh current user session (useful after level changes)
+    // This calls verify-session API endpoint to get updated user data including level
+    async function refreshCurrentUserSession() {
+        console.log('🔄 Refreshing current user session...');
+        console.log('Calling verify-session API endpoint...');
+        
+        const sessionToken = localStorage.getItem('sessionToken');
+        if (!sessionToken) {
+            console.error('No session token found. Please log in first.');
+            return false;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/auth/verify-session`, {
+                headers: { 'Authorization': `Bearer ${sessionToken}` }
+            });
+
+            if (!response.ok) {
+                console.error('Session verification failed:', response.status);
+                return false;
+            }
+
+            const result = await response.json();
+            const oldLevel = currentUser ? currentUser.level : 'unknown';
+            currentUser = result.user;
+            const newLevel = currentUser.level;
+
+            console.log('✅ Session refreshed successfully!');
+            console.log(`Old level: ${oldLevel} → New level: ${newLevel}`);
+            console.log('Updated currentUser object:', currentUser);
+
+            // Re-apply menu visibility based on new level
+            const userLevel = parseInt(currentUser.level, 10) || 1;
+            const adminLink = document.getElementById('nav-admin');
+            const settingsLink = document.getElementById('nav-settings');
+            const tagsLink = document.getElementById('nav-tags');
+
+            console.log('🔄 Updating menu visibility for level', userLevel);
+
+            if (userLevel === 1) {
+                console.log('Level 1 - hiding Tags, Admin Panel, and Settings');
+                if (tagsLink) {
+                    tagsLink.classList.add('is-hidden');
+                    tagsLink.style.setProperty('display', 'none', 'important');
+                }
+                if (adminLink) {
+                    adminLink.classList.add('is-hidden');
+                    adminLink.style.setProperty('display', 'none', 'important');
+                }
+                if (settingsLink) {
+                    settingsLink.classList.add('is-hidden');
+                    settingsLink.style.setProperty('display', 'none', 'important');
+                }
+            } else if (userLevel === 3) {
+                console.log('Level 3 - showing all menu items');
+                if (tagsLink) {
+                    tagsLink.classList.remove('is-hidden');
+                    tagsLink.style.setProperty('display', 'block', 'important');
+                }
+                if (adminLink) {
+                    adminLink.classList.remove('is-hidden');
+                    adminLink.style.setProperty('display', 'block', 'important');
+                }
+                if (settingsLink) {
+                    settingsLink.classList.remove('is-hidden');
+                    settingsLink.style.setProperty('display', 'block', 'important');
+                }
+            } else {
+                // Level 2: Show Tags, Admin/Settings based on admin role
+                if (tagsLink) {
+                    tagsLink.classList.remove('is-hidden');
+                    tagsLink.style.setProperty('display', 'block', 'important');
+                }
+                if (currentUser.role === 'admin') {
+                    if (adminLink) {
+                        adminLink.classList.remove('is-hidden');
+                        adminLink.style.setProperty('display', 'block', 'important');
+                    }
+                    if (settingsLink) {
+                        settingsLink.classList.remove('is-hidden');
+                        settingsLink.style.setProperty('display', 'block', 'important');
+                    }
+                } else {
+                    if (adminLink) {
+                        adminLink.classList.add('is-hidden');
+                        adminLink.style.setProperty('display', 'none', 'important');
+                    }
+                    if (settingsLink) {
+                        settingsLink.classList.add('is-hidden');
+                        settingsLink.style.setProperty('display', 'none', 'important');
+                    }
+                }
+            }
+
+            // Update email display with new level
+            updateUserEmailDisplay();
+
+            console.log('✅ Menu visibility updated!');
+            return true;
+        } catch (error) {
+            console.error('Error refreshing session:', error);
+            return false;
+        }
+    }
+
+    // Helper function to check user level from backend
+    async function checkUserLevelFromBackend(email) {
+        const sessionToken = localStorage.getItem('sessionToken');
+        if (!sessionToken) {
+            console.error('No session token. Please log in first.');
+            return;
+        }
+
+        if (!currentUser || currentUser.role !== 'admin') {
+            console.error('Admin access required.');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/admin/users`, {
+                headers: { 'Authorization': `Bearer ${sessionToken}` }
+            });
+            if (!response.ok) {
+                throw new Error('Failed to fetch users');
+            }
+            const users = await response.json();
+            const user = users.find(u => u.email === email);
+            if (user) {
+                console.log(`User: ${email}`);
+                console.log(`  Level: ${user.level} (type: ${typeof user.level})`);
+                console.log(`  ID: ${user.id}`);
+                console.log(`  Full user object:`, user);
+                return user.level;
+            } else {
+                console.error(`User "${email}" not found.`);
+            }
+        } catch (err) {
+            console.error('Error checking user level:', err);
+        }
+    }
+
+    // Quick fix: Update eric.brilliant@gmail.com to level 3
+    async function fixEricLevel() {
+        console.log('🔧 Fixing eric.brilliant@gmail.com level to 3...');
+        await setUserLevelByEmail('eric.brilliant@gmail.com', 3);
+        if (currentUser && currentUser.email === 'eric.brilliant@gmail.com') {
+            console.log('🔄 Refreshing session...');
+            await refreshCurrentUserSession();
+            console.log('✅ Done! Check if Tags and Admin Panel are visible now.');
+        }
+    }
+
+    // Make helper functions available globally
+    window.setUserLevelByEmail = setUserLevelByEmail;
+    window.refreshCurrentUserSession = refreshCurrentUserSession;
+    window.checkUserLevelFromBackend = checkUserLevelFromBackend;
+    window.fixEricLevel = fixEricLevel;
 
     // Check authentication and load projects on startup
     checkAuthentication().then(isAuthenticated => {
