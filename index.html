@@ -2323,6 +2323,15 @@
                 // Show matching images from backend, but allow manual selection
                 console.log('=== LIBRARY VIEW WITH SEARCH TAGS (BACKEND FILTER) ===');
 
+                // Sync exactWordMode with button state before searching
+                if (exactWordToggleBtn) {
+                    const buttonIsActive = exactWordToggleBtn.classList.contains('is-active');
+                    if (exactWordMode !== buttonIsActive) {
+                        console.warn('[FRONTEND] exactWordMode variable out of sync with button! Variable:', exactWordMode, 'Button:', buttonIsActive, '- syncing...');
+                        exactWordMode = buttonIsActive;
+                    }
+                }
+
                 const sessionToken2 = localStorage.getItem('sessionToken');
                 const headers2 = {};
                 if (sessionToken2) {
@@ -2336,8 +2345,13 @@
 
                 console.log('[FRONTEND] Searching with tags:', currentSearchTags, 'mode:', searchMode, 'matchMode:', matchMode, 'exactWordMode:', exactWordMode);
                 console.log('[FRONTEND] Button state check - has is-active:', exactWordToggleBtn ? exactWordToggleBtn.classList.contains('is-active') : 'button not found');
+                console.log('[FRONTEND] Using matchMode:', matchMode, 'for search');
 
-                const tagResponse = await fetch(`${API_URL}/images?tags=${currentSearchTags.join(',')}&mode=${searchMode}&match=${matchMode}`, {
+                const apiUrl = `${API_URL}/images?tags=${currentSearchTags.join(',')}&mode=${searchMode}&match=${matchMode}`;
+                console.log('[FRONTEND] API URL:', apiUrl);
+                console.log('[FRONTEND] Request parameters - tags:', currentSearchTags, 'mode:', searchMode, 'match:', matchMode);
+                
+                const tagResponse = await fetch(apiUrl, {
                     headers: headers2
                 });
 
@@ -2346,7 +2360,8 @@
                 }
 
                 const tagMatchingImages = await tagResponse.json();
-                console.log('Tag-matching images from backend (subjective only) found:', tagMatchingImages.length);
+                console.log('[FRONTEND] Tag-matching images from backend (subjective only) found:', tagMatchingImages.length);
+                console.log('[FRONTEND] Match mode used:', matchMode, 'exactWordMode was:', exactWordMode);
 
                 // In library view with tags: show matching images first, then all other images
                 // This allows users to see matching results AND browse/select other images manually
@@ -7413,13 +7428,30 @@
     }
 
     if (exactWordToggleBtn) {
-        exactWordToggleBtn.addEventListener('click', () => {
+        exactWordToggleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Toggle the mode FIRST
+            const oldMode = exactWordMode;
             exactWordMode = !exactWordMode;
             console.log('=== EXACT WORD BUTTON CLICKED ===');
-            console.log('exactWordMode changed to:', exactWordMode ? 'EXACT' : 'PARTIAL');
-            console.log('Button has is-active class:', exactWordToggleBtn.classList.contains('is-active'));
+            console.log('exactWordMode changed from:', oldMode ? 'EXACT' : 'PARTIAL', 'to:', exactWordMode ? 'EXACT' : 'PARTIAL');
+            console.log('Button has is-active class BEFORE update:', exactWordToggleBtn.classList.contains('is-active'));
+            
+            // Update button visual state to match the variable IMMEDIATELY
             updateExactWordButtonState();
-            console.log('After updateExactWordButtonState - Button has is-active class:', exactWordToggleBtn.classList.contains('is-active'));
+            const buttonNowActive = exactWordToggleBtn.classList.contains('is-active');
+            console.log('After updateExactWordButtonState - Button has is-active class:', buttonNowActive);
+            console.log('exactWordMode variable is now:', exactWordMode);
+            console.log('Match mode will be:', exactWordMode ? 'exact' : 'partial');
+            
+            // Verify they're in sync (should always match after updateExactWordButtonState)
+            if (exactWordMode !== buttonNowActive) {
+                console.error('SYNC ERROR: exactWordMode (', exactWordMode, ') does not match button state (', buttonNowActive, ')');
+                // Force sync - use the variable value as source of truth
+                updateExactWordButtonState();
+            }
             console.log('=== END BUTTON CLICK ===');
 
             // Recalculate chip colors/counts to reflect new match mode
@@ -7428,11 +7460,25 @@
                 updateTagChipColors(currentTags, tagSearchMode);
             }
 
-            // When match mode changes, refresh the display if tags are active or in pool view
+            // ALWAYS refresh the display when match mode changes if there are tags or in pool view
+            // This ensures results are recalculated with the new exact/partial mode
             if (searchTags.length > 0 || isPoolView) {
-                displayLibraryImages().then(() => {
-                    updateSelectionState();
-                });
+                console.log('Refreshing display with new exactWordMode:', exactWordMode, 'matchMode will be:', exactWordMode ? 'exact' : 'partial');
+                // Clear selectedImages when match mode changes, as the search results have changed
+                // This prevents showing selections from the previous match mode
+                const previousSelectedCount = selectedImages.length;
+                selectedImages = [];
+                console.log('Cleared', previousSelectedCount, 'selected images due to match mode change');
+                // Use a small delay to ensure button state is fully updated
+                setTimeout(() => {
+                    displayLibraryImages().then(() => {
+                        console.log('Display refreshed successfully with exactWordMode:', exactWordMode);
+                        updateSelectionState();
+                    }).catch(error => {
+                        console.error('Error refreshing display after exact word toggle:', error);
+                        updateSelectionState();
+                    });
+                }, 10);
             } else {
                 updateSelectionState();
             }
