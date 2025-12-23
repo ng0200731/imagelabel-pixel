@@ -1627,7 +1627,12 @@
                         .filter(tag => tag);
 
                     for (const chipTag of chipTagsInOrder) {
-                        if (matchingSubjectiveTags.some(mt => mt.toLowerCase() === chipTag)) {
+                        if (matchingSubjectiveTags.some(mt => {
+                            const mtLower = mt.toLowerCase();
+                            return exactWordMode
+                                ? mtLower === chipTag
+                                : mtLower.includes(chipTag);
+                        })) {
                             primaryTagLower = chipTag;
                             break;
                         }
@@ -1639,11 +1644,20 @@
                     overlayColor = searchTagColors[primaryTagLower];
                 }
 
-                // Fallback: first matching tag color
+                // Fallback: first matching SEARCH TAG color
                 if (!overlayColor) {
-                    for (const mt of matchingSubjectiveTags) {
-                        const c = searchTagColors[mt.toLowerCase()];
-                        if (c) {
+                    for (const st of currentSearchTags) {
+                        const stLower = (st || '').toLowerCase();
+                        if (!stLower) continue;
+                        const c = searchTagColors[stLower];
+                        if (!c) continue;
+                        const hasMatch = matchingSubjectiveTags.some(mt => {
+                            const mtLower = mt.toLowerCase();
+                            return exactWordMode
+                                ? mtLower === stLower
+                                : mtLower.includes(stLower);
+                        });
+                        if (hasMatch) {
                             overlayColor = c;
                             break;
                         }
@@ -1823,7 +1837,12 @@
                         .filter(tag => tag);
 
                     for (const chipTag of chipTagsInOrder) {
-                        if (matchingTags.some(mt => mt.toLowerCase() === chipTag)) {
+                        if (matchingTags.some(mt => {
+                            const mtLower = mt.toLowerCase();
+                            return exactWordMode
+                                ? mtLower === chipTag
+                                : mtLower.includes(chipTag);
+                        })) {
                             primaryTagLower = chipTag;
                             break;
                         }
@@ -1835,11 +1854,20 @@
                     cardColor = searchTagColors[primaryTagLower];
                 }
 
-                // Fallback: first matching tag color
+                // Fallback: first matching SEARCH TAG color
                 if (!cardColor) {
-                    for (const mt of matchingTags) {
-                        const c = searchTagColors[mt.toLowerCase()];
-                        if (c) {
+                    for (const st of currentSearchTags) {
+                        const stLower = (st || '').toLowerCase();
+                        if (!stLower) continue;
+                        const c = searchTagColors[stLower];
+                        if (!c) continue;
+                        const hasMatch = matchingTags.some(mt => {
+                            const mtLower = mt.toLowerCase();
+                            return exactWordMode
+                                ? mtLower === stLower
+                                : mtLower.includes(stLower);
+                        });
+                        if (hasMatch) {
                             cardColor = c;
                             break;
                         }
@@ -2165,7 +2193,65 @@
                     tagOverlay.classList.add('has-matches');
                 }
 
+                if (shouldHighlightOverlay) {
+                    // Determine primary/group tag from chip order (left → right), including partial matches.
+                    let primaryTagLower = null;
+                    const chipContainer = document.getElementById('library-search-chips');
+                    if (chipContainer) {
+                        const chipNodes = Array.from(chipContainer.querySelectorAll('.search-chip'));
+                        const chipTagsInOrder = chipNodes
+                            .map(chip => (chip.dataset.tag || '').toLowerCase())
+                            .filter(tag => tag);
+
+                        for (const chipTag of chipTagsInOrder) {
+                            if (matchingSubjectiveTags.some(mt => {
+                                const mtLower = mt.toLowerCase();
+                                return exactWordMode
+                                    ? mtLower === chipTag
+                                    : mtLower.includes(chipTag);
+                            })) {
+                                primaryTagLower = chipTag;
+                                break;
+                            }
+                        }
+                    }
+
+                    let overlayColor = null;
+                    if (primaryTagLower && searchTagColors[primaryTagLower]) {
+                        overlayColor = searchTagColors[primaryTagLower];
+                    }
+
+                    if (!overlayColor) {
+                        for (const st of currentSearchTags) {
+                            const stLower = (st || '').toLowerCase();
+                            if (!stLower) continue;
+                            const c = searchTagColors[stLower];
+                            if (!c) continue;
+                            const hasMatch = matchingSubjectiveTags.some(mt => {
+                                const mtLower = mt.toLowerCase();
+                                return exactWordMode
+                                    ? mtLower === stLower
+                                    : mtLower.includes(stLower);
+                            });
+                            if (hasMatch) {
+                                overlayColor = c;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (overlayColor) {
+                        tagOverlay.style.backgroundColor = overlayColor;
+                        tagOverlay.style.color = '#ffffff';
+                    }
+                }
+
                 const isAndAllTagsMatch = (tagSearchMode === 'AND') && isTagSelected && currentSearchTags.length > 1;
+                tagOverlay.textContent = subjectiveTags.slice(0, 3).join(', ');
+                if (subjectiveTags.length > 3) {
+                    tagOverlay.textContent += ` +${subjectiveTags.length - 3}`;
+                }
+
                 if (isAndAllTagsMatch) {
                     const dupBadge = document.createElement('div');
                     dupBadge.textContent = 'DUP';
@@ -2180,11 +2266,6 @@
                     dupBadge.style.borderRadius = '3px';
                     dupBadge.style.zIndex = '2';
                     tagOverlay.appendChild(dupBadge);
-                }
-
-                tagOverlay.textContent = subjectiveTags.slice(0, 3).join(', ');
-                if (subjectiveTags.length > 3) {
-                    tagOverlay.textContent += ` +${subjectiveTags.length - 3}`;
                 }
 
                 card.appendChild(tagOverlay);
