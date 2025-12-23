@@ -1566,15 +1566,34 @@
 
         // Add tag overlay - show only subjective tags (exclude objective metadata like width/length)
         const matchingTags = getMatchingTags(image.tags || [], currentSearchTags);
-        const isTagSelected = tagSelectedImages.includes(image.id);
         const allImageTags = image.tags || [];
         
         // Filter out objective metadata tags (width, length, book, page, row, column, type, material, remark, brand, color)
         const objectivePrefixes = ['width:', 'length:', 'book:', 'page:', 'row:', 'column:', 'type:', 'material:', 'remark:', 'brand:', 'color:'];
         const subjectiveTags = allImageTags.filter(tag => {
             const tagLower = tag.toLowerCase();
-            return !objectivePrefixes.some(prefix => tagLower.startsWith(prefix));
+            return !tagLower.includes(':') && !objectivePrefixes.some(prefix => tagLower.startsWith(prefix));
         });
+
+        const isAndMode = (tagSearchMode === 'AND');
+        let matchesAllSearchTags = false;
+        if (currentSearchTags.length > 0) {
+            const subjectiveImageTags = allImageTags
+                .map(t => t.toLowerCase())
+                .filter(t => !t.includes(':') && !objectivePrefixes.some(prefix => t.startsWith(prefix)));
+
+            matchesAllSearchTags = currentSearchTags.every(searchTag => {
+                const searchLower = searchTag.toLowerCase();
+                if (!searchLower) return false;
+                return subjectiveImageTags.some(imageTag => {
+                    return exactWordMode
+                        ? imageTag === searchLower
+                        : imageTag.includes(searchLower);
+                });
+            });
+        }
+
+        const isTagSelected = isAndMode ? matchesAllSearchTags : tagSelectedImages.includes(image.id);
 
         if (subjectiveTags.length > 0) {
             const tagOverlay = document.createElement('div');
@@ -1583,33 +1602,19 @@
             // Check if any of the matching tags are subjective
             const matchingSubjectiveTags = matchingTags.filter(tag => {
                 const tagLower = tag.toLowerCase();
-                return !objectivePrefixes.some(prefix => tagLower.startsWith(prefix));
+                return !tagLower.includes(':') && !objectivePrefixes.some(prefix => tagLower.startsWith(prefix));
             });
-
-            // Check how many SEARCH TAGS this image matches (not how many image tags match)
-            // This determines if the image appears in results for multiple different search tags
-            let matchingSearchTagsCount = 0;
-            if (currentSearchTags.length > 0) {
-                const imageTagLower = allImageTags.map(t => t.toLowerCase());
-                matchingSearchTagsCount = currentSearchTags.filter(searchTag => {
-                    const searchLower = searchTag.toLowerCase();
-                    if (!searchLower) return false;
-                    // Only count subjective tags (no colon prefix)
-                    const subjectiveImageTags = imageTagLower.filter(t => 
-                        !objectivePrefixes.some(prefix => t.startsWith(prefix))
-                    );
-                    return subjectiveImageTags.some(imageTag => {
-                        return exactWordMode
-                            ? imageTag === searchLower
-                            : imageTag.includes(searchLower);
-                    });
-                }).length;
-            }
 
             // Always show all tags (or first 3 + count), but highlight if there are matches.
             // The overlay color should follow the GROUP tag (earliest chip the image matches),
             // so all images in the same group share the same box color.
-            if (matchingSubjectiveTags.length > 0) {
+            // In AND mode, we rely on backend tagSelectedImages: only those images
+            // should be highlighted as true matches of all tags.
+            const shouldHighlight = tagSearchMode === 'AND'
+                ? isTagSelected && matchingSubjectiveTags.length > 0
+                : matchingSubjectiveTags.length > 0;
+
+            if (shouldHighlight) {
                 tagOverlay.classList.add('has-matches');
 
                 // Determine primary/group tag from chip order (left → right)
@@ -1649,6 +1654,26 @@
                     tagOverlay.style.backgroundColor = overlayColor;
                     tagOverlay.style.color = '#ffffff';
                 }
+            }
+
+            // Compute how many SEARCH TAGS this image matches so we can
+            // detect duplicates across tags (e.g. image matches both "red" and "text").
+            let matchingSearchTagsCount = 0;
+            if (currentSearchTags.length > 0) {
+                const imageTagLower = allImageTags.map(t => t.toLowerCase());
+                const subjectiveImageTags = imageTagLower.filter(t =>
+                    !t.includes(':') && !objectivePrefixes.some(prefix => t.startsWith(prefix))
+                );
+
+                matchingSearchTagsCount = currentSearchTags.filter(searchTag => {
+                    const searchLower = searchTag.toLowerCase();
+                    if (!searchLower) return false;
+                    return subjectiveImageTags.some(imageTag => {
+                        return exactWordMode
+                            ? imageTag === searchLower
+                            : imageTag.includes(searchLower);
+                    });
+                }).length;
             }
 
             // If this image matches more than one active SEARCH TAG,
@@ -1758,10 +1783,15 @@
         // Handle selection state (only for non-greyscale images)
         if (!isGreyscaleIndicator) {
             const wasAlreadySelected = selectedImages.includes(image.id);
-            const hasMatchingTags = currentSearchTags.length > 0 && matchingTags.length > 0;
+            const hasMatchingTags = (tagSearchMode === 'OR') && currentSearchTags.length > 0 && matchingTags.length > 0;
+
+            // In AND mode, treat "has matching tags" only when image matches ALL active tags.
+            const effectiveHasMatchingTags = isAndMode
+                ? isTagSelected
+                : hasMatchingTags;
 
             // Handle selection logic (same for both pool view and library view)
-            if (wasAlreadySelected || hasMatchingTags) {
+            if (wasAlreadySelected || effectiveHasMatchingTags) {
                 card.classList.add('selected');
 
                 // Add pool-view class if in pool view for styling
@@ -1770,17 +1800,11 @@
                 }
 
                 // Add visual indicator for selection type - prioritize tag selection
-                if (isTagSelected) {
-                    card.classList.add('tag-selection');
-                } else if (hasMatchingTags) {
+                card.classList.remove('manual-selection', 'tag-selection');
+                if (effectiveHasMatchingTags) {
                     card.classList.add('tag-selection');
                 } else if (wasAlreadySelected) {
                     card.classList.add('manual-selection');
-                }
-
-                // Only add to selectedImages if not already there
-                if (!wasAlreadySelected) {
-                    selectedImages.push(image.id);
                 }
             }
 
@@ -2080,14 +2104,46 @@
             }
 
             const matchingTags = getMatchingTags(image.tags || [], currentSearchTags);
-            const isTagSelected = tagSelectedImages.includes(image.id);
             const allImageTags = image.tags || [];
-            
+
             const objectivePrefixes = ['width:', 'length:', 'book:', 'page:', 'row:', 'column:', 'type:', 'material:', 'remark:', 'brand:', 'color:'];
             const subjectiveTags = allImageTags.filter(tag => {
                 const tagLower = tag.toLowerCase();
-                return !objectivePrefixes.some(prefix => tagLower.startsWith(prefix));
+                return !tagLower.includes(':') && !objectivePrefixes.some(prefix => tagLower.startsWith(prefix));
             });
+
+            // Determine matching info for overlay + selection, with AND/OR awareness
+            let matchingSearchTagsCount = 0;
+            let matchesAllSearchTags = false;
+            if (currentSearchTags.length > 0) {
+                const imageTagLower = allImageTags.map(t => t.toLowerCase());
+                const subjectiveImageTags = imageTagLower.filter(t =>
+                    !t.includes(':') && !objectivePrefixes.some(prefix => t.startsWith(prefix))
+                );
+
+                matchingSearchTagsCount = currentSearchTags.filter(searchTag => {
+                    const searchLower = searchTag.toLowerCase();
+                    if (!searchLower) return false;
+                    return subjectiveImageTags.some(imageTag => {
+                        return exactWordMode
+                            ? imageTag === searchLower
+                            : imageTag.includes(searchLower);
+                    });
+                }).length;
+
+                matchesAllSearchTags = currentSearchTags.every(searchTag => {
+                    const searchLower = searchTag.toLowerCase();
+                    if (!searchLower) return false;
+                    return subjectiveImageTags.some(imageTag => {
+                        return exactWordMode
+                            ? imageTag === searchLower
+                            : imageTag.includes(searchLower);
+                    });
+                });
+            }
+
+            const isAndMode = (tagSearchMode === 'AND');
+            const isTagSelected = isAndMode ? matchesAllSearchTags : tagSelectedImages.includes(image.id);
 
             if (subjectiveTags.length > 0) {
                 const tagOverlay = document.createElement('div');
@@ -2095,10 +2151,14 @@
 
                 const matchingSubjectiveTags = matchingTags.filter(tag => {
                     const tagLower = tag.toLowerCase();
-                    return !objectivePrefixes.some(prefix => tagLower.startsWith(prefix));
+                    return !tagLower.includes(':') && !objectivePrefixes.some(prefix => tagLower.startsWith(prefix));
                 });
 
-                if (matchingSubjectiveTags.length > 0) {
+                const shouldHighlightOverlay = tagSearchMode === 'AND'
+                    ? isTagSelected && matchingSubjectiveTags.length > 0
+                    : matchingSubjectiveTags.length > 0;
+
+                if (shouldHighlightOverlay) {
                     tagOverlay.classList.add('has-matches');
                 }
 
@@ -2121,25 +2181,25 @@
             }
 
             const wasAlreadySelected = selectedImages.includes(image.id);
-            const hasMatchingTags = currentSearchTags.length > 0 && matchingTags.length > 0;
+            const hasMatchingTags = (tagSearchMode === 'OR') && currentSearchTags.length > 0 && matchingTags.length > 0;
 
-            if (wasAlreadySelected || hasMatchingTags) {
+            // In AND mode, treat "has matching tags" only when image matches ALL active tags.
+            const effectiveHasMatchingTags = isAndMode
+                ? isTagSelected
+                : hasMatchingTags;
+
+            if (wasAlreadySelected || effectiveHasMatchingTags) {
                 card.classList.add('selected');
 
                 if (isPoolView) {
                     card.classList.add('pool-view');
                 }
 
-                if (isTagSelected) {
-                    card.classList.add('tag-selection');
-                } else if (hasMatchingTags) {
+                card.classList.remove('manual-selection', 'tag-selection');
+                if (effectiveHasMatchingTags) {
                     card.classList.add('tag-selection');
                 } else if (wasAlreadySelected) {
                     card.classList.add('manual-selection');
-                }
-
-                if (!wasAlreadySelected) {
-                    selectedImages.push(image.id);
                 }
             }
 
@@ -2412,14 +2472,18 @@
                     ...remainingMatches
                 ];
 
-                // For AND mode: show ONLY matching images. For OR: matching first, then non-matching.
+                // AND & OR: always show matching images first, then all non-matching images.
+                // Difference between AND/OR is only which images backend returns as "matching".
+                const matchingIds = new Set(tagMatchingImages.map(img => img.id));
+                const nonMatchingImages = allImages
+                    .filter(img => !matchingIds.has(img.id))
+                    .sort((a, b) => b.id - a.id);
+
+                imagesToDisplay = [...orderedMatches, ...nonMatchingImages];
+
                 if (searchMode === 'AND') {
-                    imagesToDisplay = orderedMatches;
-                    console.log('Library view with search tags - AND mode: showing ONLY matching images. Matching:', orderedMatches.length);
+                    console.log('Library view with search tags - AND mode: matching (red AND text), then all NOT (red AND text). Matching:', orderedMatches.length, 'Non-matching:', nonMatchingImages.length, 'Total:', imagesToDisplay.length);
                 } else {
-                    const matchingIds = new Set(tagMatchingImages.map(img => img.id));
-                    const nonMatchingImages = allImages.filter(img => !matchingIds.has(img.id)).sort((a, b) => b.id - a.id);
-                    imagesToDisplay = [...orderedMatches, ...nonMatchingImages];
                     console.log('Library view with search tags - OR mode: matching first (by chip order), then non-matching. Matching:', orderedMatches.length, 'Non-matching:', nonMatchingImages.length, 'Total:', imagesToDisplay.length);
                 }
             }
@@ -4003,10 +4067,13 @@
         console.log('updateButtonVisibility called, isPoolView:', isPoolView, 'selectedImages.length:', selectedImages.length);
         console.log('searchTags.length:', searchTags.length);
 
-        // In pool view, consider both manual and tag selections
-        const hasSelections = isPoolView ?
-            (selectedImages.length > 0 || tagSelectedImages.length > 0) :
-            selectedImages.length > 0;
+        const currentSearchTags = searchTags.map(tag => tag.text);
+
+        // In pool view, consider both manual and tag selections.
+        // In library view, only consider tag selections when there are active search tags.
+        const hasSelections = isPoolView
+            ? (selectedImages.length > 0 || tagSelectedImages.length > 0)
+            : (selectedImages.length > 0 || (currentSearchTags.length > 0 && tagSelectedImages.length > 0));
 
         console.log('=== BUTTON VISIBILITY DEBUG ===');
         console.log('isPoolView:', isPoolView);
@@ -7546,6 +7613,17 @@
         console.log('Tag search mode changed to:', tagSearchMode);
         console.log('Current view - isPoolView:', isPoolView, 'searchTags.length:', searchTags.length);
         updateTagModeButtonText();
+
+        if (tagSearchMode === 'AND') {
+            const previous = selectedImages.slice();
+            const kept = previous.filter(id => imageSelectionSource[id] === 'manual');
+            const removed = previous.filter(id => imageSelectionSource[id] !== 'manual');
+            selectedImages = kept;
+            removed.forEach(id => {
+                delete imageSelectionOrder[id];
+                delete imageSelectionSource[id];
+            });
+        }
         
         // Update separators between chips
         renumberSearchChips();
