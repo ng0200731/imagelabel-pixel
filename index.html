@@ -1857,7 +1857,9 @@
 
             // Apply per-tag highlight color to the card outline based on matching tags.
             // Use the same primary/group tag logic so outline color matches the group color.
-            if (matchingTags.length > 0) {
+            // In AND mode, only apply border if image matches ALL tags (use effectiveHasMatchingTags)
+            const shouldApplyBorder = isAndMode ? effectiveHasMatchingTags : (matchingTags.length > 0);
+            if (shouldApplyBorder) {
                 let primaryTagLower = null;
                 const chipContainer = document.getElementById('library-search-chips');
                 if (chipContainer) {
@@ -7828,23 +7830,26 @@
         console.log('Clearing tagSelectedImages due to mode change');
         tagSelectedImages = [];
 
-        if (tagSearchMode === 'AND') {
-            const previous = selectedImages.slice();
-            const kept = previous.filter(id => imageSelectionSource[id] === 'manual');
-            const removed = previous.filter(id => imageSelectionSource[id] !== 'manual');
-            selectedImages = kept;
-            removed.forEach(id => {
-                delete imageSelectionOrder[id];
-                delete imageSelectionSource[id];
-            });
-        }
-        
+        // Clear ALL selections when switching modes (both manual and tag-based)
+        // This prevents old OR mode selections from showing in AND mode
+        console.log('Clearing all selections due to mode change');
+        selectedImages = [];
+        imageSelectionSource = {};
+        imageSelectionOrder = {};
+
         // Update separators between chips
         renumberSearchChips();
-        
+
         // Refresh display immediately if there are search tags OR if in pool view
         if (searchTags.length > 0 || isPoolView) {
             console.log('Refreshing display with mode:', tagSearchMode, 'for tags:', searchTags.map(t => t.text));
+
+            // Force clear the grid before refreshing to remove old cards
+            const libraryGrid = document.getElementById('library-grid');
+            if (libraryGrid) {
+                libraryGrid.innerHTML = '';
+            }
+
             displayLibraryImages().then(() => {
                 // Recalculate selection count after mode change (AND/OR affects tagSelectedImages)
                 updateSelectionState();
