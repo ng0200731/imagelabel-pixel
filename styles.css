@@ -819,6 +819,10 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
 }
 .subj-freq-list {
   display: flex;
@@ -990,6 +994,10 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
   margin: 0 0 8px 0;
   font-size: 14px;
   letter-spacing: 0.02em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
 }
 .lightbox-freq-list {
   display: flex;

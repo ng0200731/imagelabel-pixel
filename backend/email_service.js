@@ -378,7 +378,7 @@ function generateHtmlContent(projectData, senderMessage) {
                         <div class="metadata-section subjective-tags">
                             <div class="metadata-title">All Tags</div>
                             <div class="tag-list">
-                                ${subjectiveTags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                                ${subjectiveTags.map(tag => highlightMatchingTag(tag, projectTags)).join('')}
                             </div>
                         </div>
                     </div>

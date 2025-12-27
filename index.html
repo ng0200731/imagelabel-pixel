@@ -213,7 +213,10 @@
                     </div>
                     <!-- RIGHT: frequently used feelings (separate block, own height) -->
                     <div>
-                      <div class="subj-freq-header">Frequently used</div>
+                      <div class="subj-freq-header">
+                        <span>Frequently used</span>
+                        <button id="subj-freq-sort-btn" class="button is-small" type="button" title="Sort A-Z">A-Z</button>
+                      </div>
                       <div id="subj-freq-list" class="subj-freq-list"></div>
                     </div>
                   </div>
@@ -813,10 +816,13 @@
     const subjInput = document.getElementById('subj-input');
     const subjChips = document.getElementById('subj-chips');
     const subjFreqList = document.getElementById('subj-freq-list');
+    const subjFreqSortBtn = document.getElementById('subj-freq-sort-btn');
 
     // Track frequency of subjective (feeling) tags in-memory
     const subjFreqMap = {};
     let subjToastTimeout = null;
+    let subjFreqSortMode = 'frequency'; // 'frequency' or 'alphabetical'
+    let lightboxFreqSortMode = 'frequency'; // 'frequency' or 'alphabetical' for lightbox
 
     // Objective metadata inputs
     const objBookInput = document.getElementById('obj-book');
@@ -3122,10 +3128,16 @@
 
     function updateSubjFreqList() {
         if (!subjFreqList) return;
-        // Convert map to array and sort by count desc, then label asc
+        // Convert map to array and sort based on current sort mode
         const items = Object.entries(subjFreqMap)
-            .map(([label, count]) => ({ label, count }))
-            .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+            .map(([label, count]) => ({ label, count }));
+        
+        if (subjFreqSortMode === 'alphabetical') {
+            items.sort((a, b) => a.label.localeCompare(b.label));
+        } else {
+            // Default: sort by count desc, then label asc
+            items.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+        }
 
         subjFreqList.innerHTML = '';
         items.forEach(({ label, count }) => {
@@ -4124,15 +4136,34 @@
         panel.className = 'lightbox-freq-floating';
 
         const header = document.createElement('h4');
-        header.textContent = 'Frequently used';
+        const headerText = document.createElement('span');
+        headerText.textContent = 'Frequently used';
+        header.appendChild(headerText);
+        
+        const sortBtn = document.createElement('button');
+        sortBtn.className = 'button is-small';
+        sortBtn.type = 'button';
+        sortBtn.textContent = lightboxFreqSortMode === 'alphabetical' ? 'Freq' : 'A-Z';
+        sortBtn.title = lightboxFreqSortMode === 'alphabetical' ? 'Sort by Frequency' : 'Sort A-Z';
+        sortBtn.addEventListener('click', () => {
+            lightboxFreqSortMode = lightboxFreqSortMode === 'frequency' ? 'alphabetical' : 'frequency';
+            renderLightboxFreqFloating(imageId); // Re-render with new sort mode
+        });
+        header.appendChild(sortBtn);
         panel.appendChild(header);
 
         const list = document.createElement('div');
         list.className = 'lightbox-freq-list';
 
         const freqItems = Object.entries(subjFreqMap)
-            .map(([label, count]) => ({ label, count }))
-            .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+            .map(([label, count]) => ({ label, count }));
+        
+        if (lightboxFreqSortMode === 'alphabetical') {
+            freqItems.sort((a, b) => a.label.localeCompare(b.label));
+        } else {
+            // Default: sort by count desc, then label asc
+            freqItems.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+        }
 
         if (freqItems.length === 0) {
             const empty = document.createElement('div');
@@ -8248,6 +8279,16 @@
     removeAllTagsBtn.addEventListener('click', removeAllTagsFromSelected);
     tagUpdateContinueBtn.addEventListener('click', hideTagUpdateSuccess);
     tagRemovalContinueBtn.addEventListener('click', hideTagRemovalNotification);
+
+    // Frequently used sort button event listener
+    if (subjFreqSortBtn) {
+        subjFreqSortBtn.addEventListener('click', () => {
+            subjFreqSortMode = subjFreqSortMode === 'frequency' ? 'alphabetical' : 'frequency';
+            subjFreqSortBtn.textContent = subjFreqSortMode === 'alphabetical' ? 'Freq' : 'A-Z';
+            subjFreqSortBtn.title = subjFreqSortMode === 'alphabetical' ? 'Sort by Frequency' : 'Sort A-Z';
+            updateSubjFreqList();
+        });
+    }
 
     // Delete image modal event listeners
     deleteImageClose.addEventListener('click', hideDeleteImageModal);
