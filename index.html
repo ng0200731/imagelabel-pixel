@@ -4026,19 +4026,50 @@
             allTagSet.forEach(tagText => {
             const chip = document.createElement('span');
             chip.className = 'lightbox-tag-chip';
-            chip.textContent = tagText;
 
-            // Highlight if it matches current search
+            // Get current search tags for highlighting
             const currentSearchTags = searchTags.map(tag => tag.text);
-            if (currentSearchTags.some(searchTag => {
-                const tagLower = tagText.toLowerCase();
+            const tagLower = tagText.toLowerCase();
+
+            // Find all matching search terms in this tag
+            const matchingSearchTerms = currentSearchTags.filter(searchTag => {
                 const searchLower = searchTag.toLowerCase();
                 if (!searchLower) return false;
                 return exactWordMode
                     ? tagLower === searchLower
                     : tagLower.includes(searchLower);
-            })) {
-                chip.classList.add('highlighted');
+            });
+
+            if (matchingSearchTerms.length > 0) {
+                // Add thicker border to the whole tag element
+                chip.style.border = '2px solid #ffd700';
+                chip.style.boxShadow = '0 0 4px rgba(255, 215, 0, 0.5)';
+
+                // In exact word mode, highlight the whole tag
+                if (exactWordMode) {
+                    chip.style.backgroundColor = '#ffd700';
+                    chip.style.color = '#000';
+                    chip.style.fontWeight = '600';
+                    chip.textContent = tagText;
+                } else {
+                    // In partial mode, highlight the matching substrings
+                    // Sort by length descending to match longer terms first
+                    const sortedTerms = matchingSearchTerms
+                        .map(t => t.toLowerCase())
+                        .sort((a, b) => b.length - a.length);
+
+                    // Build a regex to find all occurrences of matching terms
+                    const escapedTerms = sortedTerms.map(term =>
+                        term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                    );
+                    const regex = new RegExp(`(${escapedTerms.join('|')})`, 'gi');
+
+                    // Replace matches with highlighted spans
+                    const highlightedHTML = tagText.replace(regex, '<mark style="background-color: #ffd700; color: #000; font-weight: 600; padding: 0;">$1</mark>');
+                    chip.innerHTML = highlightedHTML;
+                }
+            } else {
+                chip.textContent = tagText;
             }
 
             // Add red remove "×" to request confirmation before deletion
