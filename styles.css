@@ -607,6 +607,32 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
 #dropzone .preview-grid {
     flex: 1;
     min-height: 200px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Ensure images in dropzone preview cards display fully without cropping at any zoom level */
+#dropzone .preview-card {
+    overflow: hidden !important;
+    background-color: #f9f9f9 !important;
+    width: 150px !important;
+    height: 150px !important;
+    box-sizing: border-box !important;
+    position: relative !important;
+}
+
+#dropzone .preview-card img {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
+    object-position: center !important;
+    display: block !important;
 }
 
 /* Custom scrollbar styling for tag-panel__body */
@@ -637,6 +663,10 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
     overflow: hidden;
     flex-shrink: 0; /* Prevent shrinking */
     box-sizing: border-box; /* Include border in size calculation */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f9f9f9;
 }
 
 .preview-card img {
@@ -645,7 +675,6 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
     object-fit: contain;
     object-position: center;
     display: block;
-    background-color: #f9f9f9;
 }
 
 /* Library card hover effect for clickable images */
