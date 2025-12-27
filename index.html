@@ -7357,11 +7357,27 @@
 
             console.log('Tag updates completed. Refreshing display...');
 
-            // Update frequency for subjective tags that were added
-            const subjectiveTagsAdded = Array.from(tagsToAdd).filter(tag => !isObjectiveTag(tag));
-            if (subjectiveTagsAdded.length > 0) {
-                await persistFeelingsUsage(subjectiveTagsAdded);
+            // Update frequency for tags that were added via mass update
+            // 1. Add tags to frequently used tags database (if not already there)
+            // 2. Increment frequency count by number of images in selection pool
+            //    (if tag already exists, add to existing count; if new, set to number of images)
+            const tagsAdded = Array.from(tagsToAdd);
+            if (tagsAdded.length > 0) {
+                const numberOfImages = allSelectedImageIds.length;
+                console.log(`[FRONTEND] Updating frequency for ${tagsAdded.length} tag(s) across ${numberOfImages} image(s)`);
+                
+                // The backend increments by 1 per unique tag in the array
+                // To increment by N (number of images), we need to call the API N times
+                // OR send the tag N times, but backend deduplicates, so we call N times
+                for (let i = 0; i < numberOfImages; i++) {
+                    // Call once per image - this will increment each tag by 1
+                    // After N calls, each tag will be incremented by N (number of images)
+                    await persistFeelingsUsage(tagsAdded);
+                }
+                
+                console.log(`[FRONTEND] Called persistFeelingsUsage ${numberOfImages} times for ${tagsAdded.length} tag(s)`);
                 await fetchSubjFrequencies();
+                console.log(`[FRONTEND] Frequency updated successfully - each tag incremented by ${numberOfImages}`);
             }
 
             // Refresh the library display
