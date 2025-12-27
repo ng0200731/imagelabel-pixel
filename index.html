@@ -84,7 +84,7 @@
               <button id="exact-word-toggle" class="button exact-word-toggle-btn" type="button">EXACT WORD</button>
             </div>
             <div id="library-search-chips" class="chips search-chips"></div>
-            <button id="update-tag-btn" class="button update-tag-btn is-hidden" type="button">Update Tag</button>
+            <button id="update-tag-btn" class="button update-tag-btn is-hidden" type="button">Mass Update Tag</button>
             <button id="delete-image-btn" class="button delete-image-btn is-hidden" type="button">Delete Image</button>
 
           </div>
@@ -538,12 +538,16 @@
       <div id="update-tag-modal" class="modal-overlay is-hidden">
         <div class="modal-content update-tag-modal-content">
           <div class="modal-header">
-            <h2>Update Tags</h2>
+            <h2>Mass Update Tags</h2>
             <button id="update-tag-close" class="modal-close-btn">✕</button>
           </div>
           <div class="modal-body update-tag-body">
             <div class="tag-columns">
               <div class="tag-column">
+                <h3>Selected Images</h3>
+                <div id="selected-images-list" class="selected-images-list">
+                  <!-- Selected images will be populated here -->
+                </div>
                 <h3>Original Tags</h3>
                 <div id="original-tags-list" class="tags-list">
                   <!-- Original tags will be populated here -->
@@ -834,6 +838,7 @@
     let subjToastTimeout = null;
     let subjFreqSortMode = 'frequency'; // 'frequency' or 'alphabetical'
     let lightboxFreqSortMode = 'frequency'; // 'frequency' or 'alphabetical' for lightbox
+    let updateTagFreqSortMode = 'frequency'; // 'frequency' or 'alphabetical' for update tag modal
 
     // Objective metadata inputs
     const objBookInput = document.getElementById('obj-book');
@@ -933,6 +938,7 @@
     // Update tag modal elements
     const updateTagModal = document.getElementById('update-tag-modal');
     const updateTagClose = document.getElementById('update-tag-close');
+    const selectedImagesList = document.getElementById('selected-images-list');
     const originalTagsList = document.getElementById('original-tags-list');
     const newTagsList = document.getElementById('new-tags-list');
     const newTagInput = document.getElementById('new-tag-input');
@@ -4511,14 +4517,11 @@
                 console.log('Library view - Add to Project button HIDDEN (no selections)');
             }
 
-            // Hide Update Tag button in library view
-            updateTagBtn.classList.add('is-hidden');
-
             console.log('Set buttons for library view, showingSelectionPool:', showingSelectionPool);
         }
 
-        // Update Tag button: Show when actually displaying Selection Pool (regardless of isPoolView flag)
-        if (actuallyShowingSelectionPool && hasSelections) {
+        // Update Tag button: Show when there are selections (either in pool view or library view with tag selections)
+        if (hasSelections) {
             updateTagBtn.classList.remove('is-hidden');
             updateTagBtn.disabled = false;
         } else {
@@ -6682,7 +6685,17 @@
 
     // Update Tag Modal Functions
     function showUpdateTagModal() {
-        console.log('showUpdateTagModal called');
+        console.log('[FRONTEND] showUpdateTagModal called');
+
+        // Get all unique tags from selected images (both manually selected and tag-selected)
+        const allSelectedImageIds = [...new Set([...selectedImages, ...tagSelectedImages])];
+        console.log('[FRONTEND] All selected image IDs:', allSelectedImageIds);
+        
+        if (allSelectedImageIds.length === 0) {
+            console.warn('[FRONTEND] No images selected - cannot show modal');
+            alert('No images selected. Please select images first.');
+            return;
+        }
 
         // Reset state
         tagsToRemove.clear();
@@ -6690,16 +6703,19 @@
         tagsToAdd.clear();
 
         // Hide success modal if visible
-        tagUpdateSuccessModal.classList.add('is-hidden');
+        if (tagUpdateSuccessModal) {
+            tagUpdateSuccessModal.classList.add('is-hidden');
+        }
 
         // Reset Remove All Tags button
         const removeAllBtn = document.getElementById('remove-all-tags-btn');
-        removeAllBtn.textContent = 'Remove All Tags';
-        removeAllBtn.style.backgroundColor = '#f44336'; // Red for remove
+        if (removeAllBtn) {
+            removeAllBtn.textContent = 'Remove All Tags';
+            removeAllBtn.style.backgroundColor = '#f44336'; // Red for remove
+        }
 
-        // Get all unique tags from selected images
         const originalTags = new Set();
-        selectedImages.forEach(imageId => {
+        allSelectedImageIds.forEach(imageId => {
             const image = libraryImages.find(img => img.id === imageId);
             if (image && image.tags) {
                 image.tags.forEach(tag => originalTags.add(tag));
@@ -6708,23 +6724,55 @@
 
         const sortedTags = Array.from(originalTags).sort();
         const tagCount = sortedTags.length;
+        console.log('[FRONTEND] Found', tagCount, 'unique tags across selected images');
 
         // Update modal header with tag count
         const updateTagHeader = document.querySelector('#update-tag-modal h2');
         if (updateTagHeader) {
-            updateTagHeader.textContent = `Update Tags {#${tagCount}}`;
+            updateTagHeader.textContent = `Mass Update Tags {#${tagCount}}`;
+        }
+
+        // Populate selected images
+        try {
+            populateSelectedImagesList();
+        } catch (error) {
+            console.error('[FRONTEND] Error populating selected images list:', error);
         }
 
         // Populate original tags list with X buttons based on selection count
-        populateOriginalTagsList(sortedTags);
+        try {
+            populateOriginalTagsList(sortedTags);
+        } catch (error) {
+            console.error('[FRONTEND] Error populating original tags list:', error);
+        }
 
         // Clear new tags list and input
-        newTagsList.innerHTML = '';
-        newTagInput.value = '';
-        tagWarning.classList.add('is-hidden');
+        if (newTagsList) {
+            newTagsList.innerHTML = '';
+        }
+        if (newTagInput) {
+            newTagInput.value = '';
+        }
+        if (tagWarning) {
+            tagWarning.classList.add('is-hidden');
+        }
 
         // Show modal
+        if (!updateTagModal) {
+            console.error('[FRONTEND] updateTagModal element not found!');
+            alert('Error: Tag update modal element not found. Please refresh the page.');
+            return;
+        }
+        
         updateTagModal.classList.remove('is-hidden');
+        console.log('[FRONTEND] Modal shown successfully');
+        
+        // Render frequency panel
+        try {
+            renderUpdateTagFreqFloating();
+        } catch (error) {
+            console.error('[FRONTEND] Error rendering frequency panel:', error);
+        }
     }
 
     function updateTagCount() {
@@ -6736,8 +6784,82 @@
         // Update modal header with tag count
         const updateTagHeader = document.querySelector('#update-tag-modal h2');
         if (updateTagHeader) {
-            updateTagHeader.textContent = `Update Tags {#${totalCount}}`;
+            updateTagHeader.textContent = `Mass Update Tags {#${totalCount}}`;
         }
+    }
+
+    function populateSelectedImagesList() {
+        selectedImagesList.innerHTML = '';
+
+        // Include both manually selected and tag-selected images
+        const allSelectedImageIds = [...new Set([...selectedImages, ...tagSelectedImages])];
+
+        if (allSelectedImageIds.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.color = '#ccc';
+            empty.style.padding = '10px';
+            empty.textContent = 'No images selected';
+            selectedImagesList.appendChild(empty);
+            return;
+        }
+
+        allSelectedImageIds.forEach(imageId => {
+            const image = libraryImages.find(img => img.id === imageId);
+            if (!image) return;
+
+            const imageSrc = `${API_URL}/${image.filepath.replace(/\\/g, '/')}`;
+
+            // Create image container
+            const imageContainer = document.createElement('div');
+            imageContainer.className = 'update-tag-image-item';
+            imageContainer.style.marginBottom = '10px';
+            imageContainer.style.display = 'flex';
+            imageContainer.style.alignItems = 'center';
+            imageContainer.style.gap = '10px';
+            imageContainer.style.padding = '5px';
+            imageContainer.style.border = '1px solid #ddd';
+            imageContainer.style.borderRadius = '4px';
+
+            // Create thumbnail
+            const thumbnail = document.createElement('img');
+            thumbnail.src = imageSrc;
+            thumbnail.style.width = '60px';
+            thumbnail.style.height = '60px';
+            thumbnail.style.objectFit = 'cover';
+            thumbnail.style.borderRadius = '4px';
+            thumbnail.style.flexShrink = '0';
+            thumbnail.onerror = function() {
+                this.style.backgroundColor = '#f0f0f0';
+                this.style.display = 'flex';
+                this.style.alignItems = 'center';
+                this.style.justifyContent = 'center';
+                this.textContent = 'No image';
+            };
+
+            // Create image info
+            const imageInfo = document.createElement('div');
+            imageInfo.style.flex = '1';
+            imageInfo.style.minWidth = '0';
+
+            const imageIdText = document.createElement('div');
+            imageIdText.textContent = `ID: ${image.id}`;
+            imageIdText.style.fontSize = '12px';
+            imageIdText.style.color = '#666';
+            imageIdText.style.marginBottom = '4px';
+
+            const tagsCount = document.createElement('div');
+            const tagCount = (image.tags || []).length;
+            tagsCount.textContent = `${tagCount} tag${tagCount !== 1 ? 's' : ''}`;
+            tagsCount.style.fontSize = '11px';
+            tagsCount.style.color = '#999';
+
+            imageInfo.appendChild(imageIdText);
+            imageInfo.appendChild(tagsCount);
+
+            imageContainer.appendChild(thumbnail);
+            imageContainer.appendChild(imageInfo);
+            selectedImagesList.appendChild(imageContainer);
+        });
     }
 
     function populateOriginalTagsList(tags) {
@@ -6772,17 +6894,19 @@
     }
 
     function getCommonTagsFromSelectedImages() {
-        if (selectedImages.length === 0) return [];
+        // Include both manually selected and tag-selected images
+        const allSelectedImageIds = [...new Set([...selectedImages, ...tagSelectedImages])];
+        if (allSelectedImageIds.length === 0) return [];
 
         // Get tags from first image
-        const firstImage = libraryImages.find(img => img.id === selectedImages[0]);
+        const firstImage = libraryImages.find(img => img.id === allSelectedImageIds[0]);
         if (!firstImage || !firstImage.tags) return [];
 
         let commonTags = [...firstImage.tags];
 
         // For each subsequent image, keep only tags that are also in that image
-        for (let i = 1; i < selectedImages.length; i++) {
-            const image = libraryImages.find(img => img.id === selectedImages[i]);
+        for (let i = 1; i < allSelectedImageIds.length; i++) {
+            const image = libraryImages.find(img => img.id === allSelectedImageIds[i]);
             if (!image || !image.tags) {
                 return []; // If any image has no tags, no tags are common
             }
@@ -6794,10 +6918,15 @@
 
     function hideUpdateTagModal() {
         updateTagModal.classList.add('is-hidden');
+        selectedImagesList.innerHTML = '';
         originalTagsList.innerHTML = '';
         newTagsList.innerHTML = '';
         newTagInput.value = '';
         tagWarning.classList.add('is-hidden');
+
+        // Remove frequency panel
+        const freqPanel = document.getElementById('update-tag-freq-floating');
+        if (freqPanel) freqPanel.remove();
 
         // Reset state
         tagsToRemove.clear();
@@ -6836,6 +6965,7 @@
         
         // Update tag count after removal state change
         updateTagCount();
+        renderUpdateTagFreqFloating(); // Re-render frequency panel to update disabled state
     }
 
     function removeAllTagsFromSelected() {
@@ -6869,6 +6999,7 @@
         
         // Update tag count after remove all/undo
         updateTagCount();
+        renderUpdateTagFreqFloating(); // Re-render frequency panel to update disabled state
     }
 
     function addNewTags() {
@@ -6912,6 +7043,7 @@
         // Clear input
         newTagInput.value = '';
         updateTagCount(); // Update count after adding new tags
+        renderUpdateTagFreqFloating(); // Re-render frequency panel to update disabled state
     }
 
     function removeNewTag(tag, tagElement) {
@@ -6919,6 +7051,118 @@
         tagsToAdd.delete(tag);
         tagElement.remove();
         updateTagCount(); // Update count when tag is removed
+        renderUpdateTagFreqFloating(); // Re-render frequency panel
+    }
+
+    // Render floating frequency panel in update tag modal
+    function renderUpdateTagFreqFloating() {
+        const modal = updateTagModal;
+        if (!modal || modal.classList.contains('is-hidden')) return;
+        
+        // Remove existing frequency panel
+        const existing = document.getElementById('update-tag-freq-floating');
+        if (existing) existing.remove();
+
+        const panel = document.createElement('div');
+        panel.id = 'update-tag-freq-floating';
+        panel.className = 'lightbox-freq-floating';
+
+        const header = document.createElement('h4');
+        const headerText = document.createElement('span');
+        headerText.textContent = 'Frequently used';
+        header.appendChild(headerText);
+        
+        const sortBtn = document.createElement('button');
+        sortBtn.className = 'button is-small';
+        sortBtn.type = 'button';
+        sortBtn.textContent = updateTagFreqSortMode === 'alphabetical' ? 'Freq' : 'A-Z';
+        sortBtn.title = updateTagFreqSortMode === 'alphabetical' ? 'Sort by Frequency' : 'Sort A-Z';
+        sortBtn.addEventListener('click', () => {
+            updateTagFreqSortMode = updateTagFreqSortMode === 'frequency' ? 'alphabetical' : 'frequency';
+            renderUpdateTagFreqFloating(); // Re-render with new sort mode
+        });
+        header.appendChild(sortBtn);
+        panel.appendChild(header);
+
+        const list = document.createElement('div');
+        list.className = 'lightbox-freq-list';
+
+        const freqItems = Object.entries(subjFreqMap)
+            .map(([label, count]) => ({ label, count }));
+        
+        if (updateTagFreqSortMode === 'alphabetical') {
+            freqItems.sort((a, b) => a.label.localeCompare(b.label));
+        } else {
+            // Default: sort by count desc, then label asc
+            freqItems.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+        }
+
+        if (freqItems.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.color = '#ccc';
+            empty.textContent = 'No frequent tags yet';
+            list.appendChild(empty);
+        } else {
+            // Get all existing tags (original tags not marked for removal + new tags)
+            const originalTagElements = originalTagsList.querySelectorAll('.tag-item-removable:not(.marked-for-removal)');
+            const originalTags = Array.from(originalTagElements).map(el => el.querySelector('span').textContent);
+            const existingTags = new Set([...originalTags, ...Array.from(tagsToAdd)]);
+            
+            freqItems.forEach(({ label, count }) => {
+                const row = document.createElement('div');
+                row.className = 'lightbox-freq-item';
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = label;
+                const countSpan = document.createElement('span');
+                countSpan.textContent = `×${count}`;
+                row.appendChild(nameSpan);
+                row.appendChild(countSpan);
+                
+                const isUsed = Array.from(existingTags).some(t => t.toLowerCase() === label.toLowerCase());
+                if (isUsed) {
+                    row.classList.add('disabled');
+                }
+                
+                row.addEventListener('click', () => {
+                    if (row.classList.contains('disabled')) {
+                        return; // Tag already added, do nothing
+                    }
+                    // Add tag to tagsToAdd
+                    addTagFromFrequency(label);
+                });
+                list.appendChild(row);
+            });
+        }
+
+        panel.appendChild(list);
+        modal.appendChild(panel);
+    }
+
+    // Add tag from frequency panel to new tags
+    function addTagFromFrequency(tagText) {
+        if (tagsToAdd.has(tagText)) {
+            return; // Already added
+        }
+        
+        tagsToAdd.add(tagText);
+
+        // Add to visual list with X button
+        const tagElement = document.createElement('div');
+        tagElement.className = 'tag-item tag-item-removable';
+
+        const tagTextSpan = document.createElement('span');
+        tagTextSpan.textContent = tagText;
+        tagElement.appendChild(tagTextSpan);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'tag-remove-btn';
+        removeBtn.textContent = '×';
+        removeBtn.onclick = () => removeNewTag(tagText, tagElement);
+        tagElement.appendChild(removeBtn);
+
+        newTagsList.appendChild(tagElement);
+        updateTagCount();
+        renderUpdateTagFreqFloating(); // Re-render to update disabled state
     }
 
     function showTagUpdateSuccess() {
@@ -7022,8 +7266,10 @@
 
     async function saveTagUpdates() {
         console.log('=== SAVE TAG UPDATES START ===');
-        console.log('Selected images:', selectedImages);
-        console.log('Selected images count:', selectedImages.length);
+        // Include both manually selected and tag-selected images
+        const allSelectedImageIds = [...new Set([...selectedImages, ...tagSelectedImages])];
+        console.log('Selected images:', allSelectedImageIds);
+        console.log('Selected images count:', allSelectedImageIds.length);
         console.log('Tags to remove:', Array.from(tagsToRemove));
         console.log('Remove all tags:', removeAllTags);
         console.log('Tags to add:', Array.from(tagsToAdd));
@@ -7041,7 +7287,7 @@
             const updateResults = [];
 
             // Process each selected image
-            for (const imageId of selectedImages) {
+            for (const imageId of allSelectedImageIds) {
                 try {
                     console.log(`--- Processing image ${imageId} ---`);
                     const image = libraryImages.find(img => img.id === imageId);
@@ -7099,17 +7345,24 @@
             }
 
             console.log('=== UPDATE SUMMARY ===');
-            console.log(`Total images processed: ${selectedImages.length}`);
+            console.log(`Total images processed: ${allSelectedImageIds.length}`);
             console.log(`Successful updates: ${successCount}`);
             console.log(`Failed updates: ${errorCount}`);
             console.log('Update results:', updateResults);
 
             if (errorCount > 0) {
                 console.warn(`${errorCount} images failed to update. Check the logs above for details.`);
-                alert(`Warning: ${errorCount} out of ${selectedImages.length} images failed to update. Check the browser console for details.`);
+                alert(`Warning: ${errorCount} out of ${allSelectedImageIds.length} images failed to update. Check the browser console for details.`);
             }
 
             console.log('Tag updates completed. Refreshing display...');
+
+            // Update frequency for subjective tags that were added
+            const subjectiveTagsAdded = Array.from(tagsToAdd).filter(tag => !isObjectiveTag(tag));
+            if (subjectiveTagsAdded.length > 0) {
+                await persistFeelingsUsage(subjectiveTagsAdded);
+                await fetchSubjFrequencies();
+            }
 
             // Refresh the library display
             await displayLibraryImages();
@@ -8087,8 +8340,27 @@
     selectAllBtn.addEventListener('click', selectAllImages);
     deselectAllBtn.addEventListener('click', deselectAllImages);
     updateTagBtn.addEventListener('click', () => {
-        console.log('Update Tag button clicked - showing modal');
-        showUpdateTagModal();
+        console.log('[FRONTEND] Update Tag button clicked');
+        console.log('[FRONTEND] selectedImages:', selectedImages);
+        console.log('[FRONTEND] tagSelectedImages:', tagSelectedImages);
+        
+        const allSelectedImageIds = [...new Set([...selectedImages, ...tagSelectedImages])];
+        console.log('[FRONTEND] Total selected images:', allSelectedImageIds.length);
+        
+        if (allSelectedImageIds.length === 0) {
+            console.warn('[FRONTEND] No images selected - cannot open mass update modal');
+            alert('Please select images first before updating tags.');
+            return;
+        }
+        
+        try {
+            console.log('[FRONTEND] Opening mass update tag modal...');
+            showUpdateTagModal();
+            console.log('[FRONTEND] Modal opened successfully');
+        } catch (error) {
+            console.error('[FRONTEND] Error opening mass update tag modal:', error);
+            alert('Error opening tag update modal. Please check the console for details.');
+        }
     });
     deleteImageBtn.addEventListener('click', async () => {
         console.log('Delete Image button clicked - showing modal');
