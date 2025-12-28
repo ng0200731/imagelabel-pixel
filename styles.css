@@ -973,8 +973,11 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
 
 .modal-content {
   display: block;
-  max-width: 100%;
+  max-width: 90vw;
   max-height: calc(90vh - 60px); /* Leave space for tags */
+  width: auto;
+  height: auto;
+  object-fit: contain; /* Maintain aspect ratio, fit within bounds */
   border: 2px solid #fff;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
@@ -2464,11 +2467,11 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
 .image-preview-content img {
   width: auto;
   height: auto;
-  max-width: none; /* Allow image to be larger than viewport */
-  max-height: none; /* Allow image to be larger than viewport */
+  max-width: 90vw; /* Fit within viewport width */
+  max-height: 90vh; /* Fit within viewport height */
   min-width: 300px; /* Minimum size for very small images */
   min-height: 200px; /* Minimum size for very small images */
-  object-fit: contain;
+  object-fit: contain; /* Maintain aspect ratio, fit within bounds */
   border: 3px solid #fff;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   display: block;
