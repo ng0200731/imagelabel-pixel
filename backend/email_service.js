@@ -497,6 +497,24 @@ function getSubjectiveTags(image) {
     return subjectiveTags.length > 0 ? subjectiveTags : ['No subjective tags'];
 }
 
+/**
+ * Highlight matching tags in email
+ * @param {string} tag - The tag to display
+ * @param {Array} projectTags - Array of project tags to match against
+ * @returns {string} - HTML for the tag with highlighting if it matches
+ */
+function highlightMatchingTag(tag, projectTags) {
+    const isMatch = Array.isArray(projectTags) && projectTags.some(pt =>
+        String(pt).toLowerCase().trim() === String(tag).toLowerCase().trim()
+    );
+
+    if (isMatch) {
+        return `<span class="tag" style="background: #ffd700; border-color: #ffa500; font-weight: bold;">${tag}</span>`;
+    } else {
+        return `<span class="tag">${tag}</span>`;
+    }
+}
+
 module.exports = {
     sendProjectEmail
 };

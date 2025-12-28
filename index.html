@@ -4520,8 +4520,8 @@
             console.log('Set buttons for library view, showingSelectionPool:', showingSelectionPool);
         }
 
-        // Update Tag button: Show when there are selections (either in pool view or library view with tag selections)
-        if (hasSelections) {
+        // Update Tag button: Show ONLY in Selection Pool view when there are selections
+        if (actuallyShowingSelectionPool && hasSelections) {
             updateTagBtn.classList.remove('is-hidden');
             updateTagBtn.disabled = false;
         } else {
