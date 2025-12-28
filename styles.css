@@ -625,8 +625,8 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
 #dropzone .preview-card {
     overflow: hidden !important;
     background-color: #f9f9f9 !important;
-    width: 150px !important;
-    height: 150px !important;
+    width: 120px !important;
+    height: 120px !important;
     box-sizing: border-box !important;
     position: relative !important;
     display: flex !important;
