@@ -256,6 +256,7 @@ function generateHtmlContent(projectData, senderMessage) {
             .subjective-tags { background: #f0f8ff; padding: 15px; }
             .tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
             .tag { background: #e1f5fe; padding: 4px 8px; border-radius: 4px; font-size: 12px; border: 1px solid #b3e5fc; }
+            .tag .highlight { background-color: #ffd700 !important; color: #000000 !important; font-weight: bold !important; padding: 1px 2px !important; }
 
             .footer { text-align: center; border-top: 2px solid #000; padding-top: 20px; margin-top: 30px; color: #666; }
             h1 { color: #000; margin: 0; }
@@ -378,7 +379,11 @@ function generateHtmlContent(projectData, senderMessage) {
                         <div class="metadata-section subjective-tags">
                             <div class="metadata-title">All Tags</div>
                             <div class="tag-list">
-                                ${subjectiveTags.map(tag => highlightMatchingTag(tag, projectTags)).join('')}
+                                ${subjectiveTags.map(tag => {
+                                    const highlighted = highlightMatchingTag(tag, projectTags);
+                                    console.log('[Email HTML] Tag:', tag, 'ProjectTags:', projectTags, 'Highlighted:', highlighted.substring(0, 100));
+                                    return highlighted;
+                                }).join('')}
                             </div>
                         </div>
                     </div>
@@ -498,21 +503,105 @@ function getSubjectiveTags(image) {
 }
 
 /**
- * Highlight matching tags in email
+ * Highlight matching tags in email (partial/substring matching like lightbox)
  * @param {string} tag - The tag to display
  * @param {Array} projectTags - Array of project tags to match against
  * @returns {string} - HTML for the tag with highlighting if it matches
  */
 function highlightMatchingTag(tag, projectTags) {
-    const isMatch = Array.isArray(projectTags) && projectTags.some(pt =>
-        String(pt).toLowerCase().trim() === String(tag).toLowerCase().trim()
-    );
-
-    if (isMatch) {
-        return `<span class="tag" style="background: #ffd700; border-color: #ffa500; font-weight: bold;">${tag}</span>`;
-    } else {
+    console.log('[highlightMatchingTag] Input - tag:', tag, 'projectTags:', projectTags);
+    
+    if (!Array.isArray(projectTags) || projectTags.length === 0) {
+        console.log('[highlightMatchingTag] No project tags, returning unhighlighted');
         return `<span class="tag">${tag}</span>`;
     }
+
+    const tagText = String(tag);
+    const tagLower = tagText.toLowerCase();
+    console.log('[highlightMatchingTag] Processing tag:', tagText, 'lowercase:', tagLower);
+    
+    // Find all matching project tags (partial/substring matching)
+    const matchingProjectTags = projectTags
+        .map(pt => String(pt).trim().toLowerCase())
+        .filter(pt => pt.length > 0 && tagLower.includes(pt));
+
+    console.log('[highlightMatchingTag] Matching project tags:', matchingProjectTags);
+
+    if (matchingProjectTags.length === 0) {
+        // No matches - return tag without highlighting
+        console.log('[highlightMatchingTag] No matches found');
+        return `<span class="tag">${tag}</span>`;
+    }
+
+    // Sort by length descending to match longer terms first (avoid overlapping highlights)
+    const sortedMatchingTags = matchingProjectTags.sort((a, b) => b.length - a.length);
+    console.log('[highlightMatchingTag] Sorted matching tags:', sortedMatchingTags);
+
+    // Build a regex to find all occurrences of matching terms (case-insensitive)
+    const escapedTerms = sortedMatchingTags.map(term =>
+        term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    );
+    const regexPattern = `(${escapedTerms.join('|')})`;
+    const regex = new RegExp(regexPattern, 'gi');
+    console.log('[highlightMatchingTag] Regex pattern:', regexPattern);
+
+    // Replace matches with highlighted spans (preserve original case)
+    // Build HTML by finding all matches manually for better control
+    let highlightedHTML = '';
+    let lastIndex = 0;
+    let match;
+    let matchCount = 0;
+    
+    // Reset regex (important for global regex)
+    regex.lastIndex = 0;
+    
+    // Find all matches and build HTML with proper highlighting
+    while ((match = regex.exec(tagText)) !== null) {
+        matchCount++;
+        console.log('[highlightMatchingTag] Match #' + matchCount + ':', match[0], 'at index:', match.index);
+        
+        // Add text before match
+        if (match.index > lastIndex) {
+            highlightedHTML += tagText.substring(lastIndex, match.index);
+        }
+        // Add highlighted match (preserve original case from tagText)
+        const matchedText = match[0];
+        // Use class="highlight" with inline styles for better email client support
+        const highlightSpan = `<span class="highlight" style="background-color: #ffd700 !important; color: #000000 !important; font-weight: bold !important; padding: 1px 2px !important; display: inline;">${matchedText}</span>`;
+        highlightedHTML += highlightSpan;
+        lastIndex = match.index + matchedText.length;
+        
+        // Prevent infinite loop if regex matches empty string
+        if (matchedText.length === 0) {
+            console.log('[highlightMatchingTag] Empty match detected, breaking');
+            break;
+        }
+        
+        // Safety check to prevent infinite loops
+        if (matchCount > 100) {
+            console.log('[highlightMatchingTag] Too many matches, breaking');
+            break;
+        }
+    }
+    
+    // Add remaining text after last match
+    if (lastIndex < tagText.length) {
+        highlightedHTML += tagText.substring(lastIndex);
+    }
+    
+    // If no matches were found, use original text
+    if (highlightedHTML === '') {
+        console.log('[highlightMatchingTag] No matches in regex exec, using original text');
+        highlightedHTML = tagText;
+    }
+
+    console.log('[highlightMatchingTag] Final highlighted HTML:', highlightedHTML.substring(0, 200));
+
+    // Return tag with highlighted substrings and border (same styling as lightbox)
+    // Use simpler styles for better email client compatibility
+    const result = `<span class="tag" style="display: inline-block; border: 2px solid #ffd700; padding: 4px 8px; margin: 2px; border-radius: 4px; background-color: #fff3cd;">${highlightedHTML}</span>`;
+    console.log('[highlightMatchingTag] Final result length:', result.length);
+    return result;
 }
 
 module.exports = {
