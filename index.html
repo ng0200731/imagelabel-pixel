@@ -205,7 +205,10 @@
                     <!-- LEFT: original input + hint + chips (acts as one block) -->
                     <div>
                       <label class="tag-input">Add feelings:
-                        <input id="subj-input" type="text" placeholder="type and press Enter/Tab" />
+                        <div class="autocomplete-container">
+                          <input id="subj-input" type="text" placeholder="type and press Enter/Tab" autocomplete="off" />
+                          <div id="subj-autocomplete-dropdown" class="autocomplete-dropdown"></div>
+                        </div>
                       </label>
                       <div class="hint">Press Enter or Tab to add; Backspace removes last when empty</div>
                       <!-- Chips stay visually stuck to the input; do not affect right column height -->
@@ -830,6 +833,7 @@
     const dropzone = document.getElementById('dropzone');
     const subjInput = document.getElementById('subj-input');
     const subjChips = document.getElementById('subj-chips');
+    const subjAutocompleteDropdown = document.getElementById('subj-autocomplete-dropdown');
     const subjFreqList = document.getElementById('subj-freq-list');
     const subjFreqSortBtn = document.getElementById('subj-freq-sort-btn');
 
@@ -3221,6 +3225,10 @@
                 const added = addSubjChip(label);
                 if (added !== false) {
                     refreshSubjFreqDisabledState();
+                    // Keep focus on input field after clicking frequently used tag
+                    if (subjInput) {
+                        subjInput.focus();
+                    }
                 }
             });
 
@@ -7769,10 +7777,132 @@
         }
     });
 
+    // Autocomplete state for feelings input
+    let subjAutocompleteVisible = false;
+    let subjAutocompleteItems = [];
+    let subjAutocompleteHighlightIndex = -1;
+
+    // Show autocomplete suggestions based on input
+    function showSubjAutocomplete(inputValue) {
+        if (!subjAutocompleteDropdown || !inputValue || inputValue.trim().length === 0) {
+            hideSubjAutocomplete();
+            return;
+        }
+
+        const inputLower = inputValue.toLowerCase().trim();
+        const existingTags = Array.from(subjChips.querySelectorAll('.chip')).map(c =>
+            c.textContent.replace(/[×x]$/, '').trim().toLowerCase()
+        );
+
+        // Find matching frequently used tags
+        const matchingTags = Object.keys(subjFreqMap)
+            .filter(tag => {
+                const tagLower = tag.toLowerCase();
+                // Check if input is similar to tag (partial match)
+                return tagLower.includes(inputLower) || inputLower.includes(tagLower);
+            })
+            .filter(tag => !existingTags.includes(tag.toLowerCase())) // Exclude already added tags
+            .sort((a, b) => {
+                // Sort by relevance: exact matches first, then by frequency
+                const aExact = a.toLowerCase() === inputLower;
+                const bExact = b.toLowerCase() === inputLower;
+                if (aExact !== bExact) return aExact ? -1 : 1;
+                return subjFreqMap[b] - subjFreqMap[a]; // Higher frequency first
+            })
+            .slice(0, 5); // Limit to 5 suggestions
+
+        if (matchingTags.length === 0) {
+            hideSubjAutocomplete();
+            return;
+        }
+
+        subjAutocompleteItems = matchingTags;
+        subjAutocompleteHighlightIndex = -1;
+
+        // Build dropdown HTML
+        subjAutocompleteDropdown.innerHTML = '';
+        matchingTags.forEach((tag, index) => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.textContent = tag;
+            item.dataset.tag = tag;
+            item.addEventListener('click', () => {
+                selectSubjAutocompleteItem(tag);
+            });
+            subjAutocompleteDropdown.appendChild(item);
+        });
+
+        subjAutocompleteDropdown.classList.add('show');
+        subjAutocompleteVisible = true;
+    }
+
+    function hideSubjAutocomplete() {
+        if (subjAutocompleteDropdown) {
+            subjAutocompleteDropdown.classList.remove('show');
+            subjAutocompleteVisible = false;
+            subjAutocompleteItems = [];
+            subjAutocompleteHighlightIndex = -1;
+        }
+    }
+
+    function selectSubjAutocompleteItem(tag) {
+        addSubjChip(tag);
+        subjInput.value = '';
+        hideSubjAutocomplete();
+        subjInput.focus();
+    }
+
+    // Input event listener for autocomplete
+    subjInput.addEventListener('input', (e) => {
+        const value = e.target.value;
+        showSubjAutocomplete(value);
+    });
+
+    // Keyboard navigation for autocomplete
     subjInput.addEventListener('keydown', (e) => {
+        if (subjAutocompleteVisible && subjAutocompleteItems.length > 0) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                subjAutocompleteHighlightIndex = Math.min(
+                    subjAutocompleteHighlightIndex + 1,
+                    subjAutocompleteItems.length - 1
+                );
+                updateSubjAutocompleteHighlight();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                subjAutocompleteHighlightIndex = Math.max(subjAutocompleteHighlightIndex - 1, -1);
+                updateSubjAutocompleteHighlight();
+            } else if (e.key === 'Enter' && subjAutocompleteHighlightIndex >= 0) {
+                e.preventDefault();
+                const selectedTag = subjAutocompleteItems[subjAutocompleteHighlightIndex];
+                selectSubjAutocompleteItem(selectedTag);
+                return;
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                hideSubjAutocomplete();
+                return;
+            }
+        }
+
         if (e.key === 'Enter' || e.key === 'Tab' || e.key === ',') {
             e.preventDefault();
             handleSubjCommit();
+            hideSubjAutocomplete();
+        }
+    });
+
+    function updateSubjAutocompleteHighlight() {
+        const items = subjAutocompleteDropdown.querySelectorAll('.autocomplete-item');
+        items.forEach((item, index) => {
+            item.classList.toggle('highlighted', index === subjAutocompleteHighlightIndex);
+        });
+    }
+
+    // Hide autocomplete when clicking outside
+    document.addEventListener('click', (e) => {
+        if (subjAutocompleteDropdown && !subjAutocompleteDropdown.contains(e.target) && 
+            e.target !== subjInput && !subjInput.contains(e.target)) {
+            hideSubjAutocomplete();
         }
     });
 
