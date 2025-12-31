@@ -1218,6 +1218,7 @@
     let isSelectionPoolPreview = false; // Track if we're in Selection Pool preview mode
     let pendingAddTags = new Set(); // Track tags added in lightbox before saving
     let pendingRemoveTags = new Set(); // Track tags removed in lightbox before saving
+    let pendingPatternChange = null; // Track pattern change in lightbox before saving { patternName: string }
     let lightboxDirty = false; // Track if any tag was added or removed in lightbox
     let lightboxLocked = true; // Track if lightbox fields are locked (default: locked)
     let isProjectViewLightbox = false; // Track if lightbox is opened from project view (read-only mode)
@@ -4132,6 +4133,7 @@
         if (lightboxSaveBtn) lightboxSaveBtn.classList.add('is-hidden');
         pendingAddTags.clear();
         pendingRemoveTags.clear();
+        pendingPatternChange = null;
         lightboxDirty = false;
         
         modal.classList.remove('is-hidden');
@@ -4151,6 +4153,7 @@
         if (freqFloating) freqFloating.remove();
         pendingAddTags.clear();
         pendingRemoveTags.clear();
+        pendingPatternChange = null;
         lightboxDirty = false;
         isProjectViewLightbox = false; // Reset project view flag
         if (lightboxLockBtn) lightboxLockBtn.classList.add('is-hidden');
@@ -4197,9 +4200,40 @@
             else if (tagLower.startsWith('color:')) metadata.color = tag.substring(6);
             else if (tagLower.startsWith('remark:')) metadata.remark = tag.substring(7);
         });
+        
+        // If there's a pending pattern change, use that instead (for UI display)
+        if (pendingPatternChange) {
+            metadata.pattern = pendingPatternChange;
+        }
 
-        // Build HTML with editable fields
+        // Build HTML with editable fields - Pattern first
         let html = '<div class="lightbox-metadata-section">';
+        html += '<h4>Pattern</h4>';
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Pattern:</span>
+            <div class="lightbox-pattern-dropdown-wrapper">
+                <div class="lightbox-pattern-dropdown">
+                    <div class="lightbox-pattern-dropdown-toggle" data-field="pattern">
+                        <span class="lightbox-pattern-dropdown-text">${metadata.pattern || 'Select Pattern...'}</span>
+                        <span class="lightbox-pattern-dropdown-arrow">▼</span>
+                    </div>
+                    <div class="lightbox-pattern-dropdown-menu is-hidden">
+                        <div class="lightbox-pattern-dropdown-options">
+                            <!-- Options will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="lightbox-selected-pattern-preview" class="lightbox-selected-pattern-preview is-hidden">
+                <div class="lightbox-pattern-preview-content">
+                    <img id="lightbox-selected-pattern-thumbnail" class="lightbox-pattern-thumbnail-preview" src="" alt="Pattern thumbnail" />
+                    <span id="lightbox-selected-pattern-name" class="lightbox-pattern-name-preview"></span>
+                </div>
+            </div>
+        </div>`;
+        html += '</div>';
+
+        html += '<div class="lightbox-metadata-section">';
         html += '<h4>Location</h4>';
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Book:</span>
@@ -4236,32 +4270,6 @@
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Length (mm):</span>
             <div class="lightbox-metadata-value" contenteditable="true" data-field="length">${metadata.length}</div>
-        </div>`;
-        html += '</div>';
-
-        html += '<div class="lightbox-metadata-section">';
-        html += '<h4>Pattern</h4>';
-        html += `<div class="lightbox-metadata-field">
-            <span class="lightbox-metadata-label">Pattern:</span>
-            <div class="lightbox-pattern-dropdown-wrapper">
-                <div class="lightbox-pattern-dropdown">
-                    <div class="lightbox-pattern-dropdown-toggle" data-field="pattern">
-                        <span class="lightbox-pattern-dropdown-text">${metadata.pattern || 'Select Pattern...'}</span>
-                        <span class="lightbox-pattern-dropdown-arrow">▼</span>
-                    </div>
-                    <div class="lightbox-pattern-dropdown-menu is-hidden">
-                        <div class="lightbox-pattern-dropdown-options">
-                            <!-- Options will be populated by JavaScript -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div id="lightbox-selected-pattern-preview" class="lightbox-selected-pattern-preview is-hidden">
-                <div class="lightbox-pattern-preview-content">
-                    <img id="lightbox-selected-pattern-thumbnail" class="lightbox-pattern-thumbnail-preview" src="" alt="Pattern thumbnail" />
-                    <span id="lightbox-selected-pattern-name" class="lightbox-pattern-name-preview"></span>
-                </div>
-            </div>
         </div>`;
         html += '</div>';
 
@@ -4484,19 +4492,9 @@
             selectedPatternPreview.classList.remove('is-hidden');
         }
 
-        // Update image tags in memory only (don't save yet) - remove old pattern tag and add new one
-        const tags = image.tags || [];
-        const newTags = tags.filter(tag => !tag.toLowerCase().startsWith('pattern:'));
-        newTags.push(`pattern:${patternName}`);
-        
-        // Update local image object (for UI display)
-        image.tags = newTags;
-        
-        // Also update in allImagesToDisplay for consistency
-        const imageInDisplay = allImagesToDisplay.find(img => img.id === image.id);
-        if (imageInDisplay) {
-            imageInDisplay.tags = newTags;
-        }
+        // Store pattern change in pending state (don't update image.tags yet)
+        // Only apply when user clicks save button
+        pendingPatternChange = patternName;
         
         // Mark as dirty so save button appears - pattern will be saved when user clicks save
         lightboxDirty = true;
@@ -4644,6 +4642,7 @@
     function openLibraryLightbox(index) {
         pendingAddTags.clear();
         pendingRemoveTags.clear();
+        pendingPatternChange = null;
         lightboxDirty = false;
         // Reset project view flag if not already set (for regular library view)
         // isProjectViewLightbox will be set to true in openProjectImageLightbox
@@ -4691,6 +4690,12 @@
             }
         }
         modal.classList.remove('is-hidden');
+        
+        // Reset scroll position of metadata panel to top
+        const metadataPanel = document.getElementById('lightbox-metadata-panel');
+        if (metadataPanel) {
+            metadataPanel.scrollTop = 0;
+        }
         // In project view, keep lock button hidden (read-only mode)
         if (isProjectViewLightbox) {
             if (lightboxLockBtn) lightboxLockBtn.classList.add('is-hidden');
@@ -4728,6 +4733,12 @@
             lockLightboxFields();
         }, 100);
         updateArrowVisibility();
+        
+        // Reset scroll position of metadata panel to top
+        const metadataPanel = document.getElementById('lightbox-metadata-panel');
+        if (metadataPanel) {
+            metadataPanel.scrollTop = 0;
+        }
     }
 
     // --- Search Tag Chip Functions ---
@@ -5507,6 +5518,7 @@
             }
             pendingAddTags.clear();
             pendingRemoveTags.clear();
+            pendingPatternChange = null;
             lightboxDirty = false;
             displayLightboxTags(currentImageIndex);
             renderLightboxFreqFloating(imageId);
@@ -5534,8 +5546,8 @@
             return;
         }
 
-        // Simple logic: just add pending tags to the current image
-        if (pendingAddTags.size === 0 && pendingRemoveTags.size === 0) {
+        // Simple logic: just add pending tags and pattern to the current image
+        if (pendingAddTags.size === 0 && pendingRemoveTags.size === 0 && !pendingPatternChange) {
             showLightboxToast('Nothing to save');
             return;
         }
@@ -5543,6 +5555,12 @@
         try {
             // Get current tags
             let currentTags = Array.isArray(image.tags) ? [...image.tags] : [];
+            
+            // Apply pending pattern change first (remove old pattern, add new one)
+            if (pendingPatternChange) {
+                currentTags = currentTags.filter(tag => !tag.toLowerCase().startsWith('pattern:'));
+                currentTags.push(`pattern:${pendingPatternChange}`);
+            }
             
             // Apply pending removals
             currentTags = currentTags.filter(tag => !pendingRemoveTags.has(tag));
@@ -5582,6 +5600,7 @@
 
             pendingAddTags.clear();
             pendingRemoveTags.clear();
+            pendingPatternChange = null;
             lightboxDirty = false;
             
             // Refresh display
@@ -6755,6 +6774,7 @@
         // Clear pending adds and removes on close
         pendingAddTags.clear();
         pendingRemoveTags.clear();
+        pendingPatternChange = null;
     }
 
     // Show real-size overlay (strict 1:1 based on mm dimensions)
