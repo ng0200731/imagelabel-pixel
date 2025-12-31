@@ -1187,6 +1187,7 @@
     let currentImageIndex = 0;
     let imageSources = [];
     let libraryImages = []; // Store current library images for lightbox navigation
+    let currentLightboxImages = []; // Track which image array is used for lightbox (libraryImages or allImagesToDisplay)
     let searchTags = []; // Store current search tags as chips
     let searchTagColors = {}; // Map tag text -> highlight color
     let usedSearchColors = new Set(); // Track used colors to avoid repeats
@@ -1964,19 +1965,25 @@
         const allTags = image.tags || [];
         if (allTags.length === 0) return; // Don't show modal if no tags
         
-        // Separate objective and subjective tags
-        const objectivePrefixes = ['width:', 'length:', 'book:', 'page:', 'row:', 'column:', 'type:', 'material:', 'remark:', 'pattern:', 'brand:', 'color:'];
+        // Separate subjective tags and pattern tags
+        const objectivePrefixes = ['width:', 'length:', 'book:', 'page:', 'row:', 'column:', 'type:', 'material:', 'remark:', 'brand:', 'color:'];
         const subjectiveTags = [];
+        const patternTags = [];
         
         allTags.forEach(tag => {
             const tagLower = tag.toLowerCase();
-            if (!objectivePrefixes.some(prefix => tagLower.startsWith(prefix))) {
+            if (tagLower.startsWith('pattern:')) {
+                patternTags.push(tag);
+            } else if (!objectivePrefixes.some(prefix => tagLower.startsWith(prefix))) {
                 subjectiveTags.push(tag);
             }
         });
         
-        // Don't show modal if no subjective tags
-        if (subjectiveTags.length === 0) return;
+        // Combine tags: subjective first, then pattern tags (pattern tags will be last)
+        const tagsToShow = [...subjectiveTags, ...patternTags];
+        
+        // Don't show modal if no tags to display
+        if (tagsToShow.length === 0) return;
         
         // Create modal element
         const modal = document.createElement('div');
@@ -1990,7 +1997,7 @@
         // Add title
         const title = document.createElement('div');
         title.className = 'tags-hover-modal-title';
-        title.textContent = 'Subject Tags';
+        title.textContent = 'Tags';
         modalContent.appendChild(title);
         
         // Add tags container
@@ -2000,10 +2007,20 @@
         // Get current search tags for highlighting
         const currentSearchTags = getActiveSearchTagTexts();
 
-        // Add subjective tags only
-        subjectiveTags.forEach(tag => {
+        // Add tags (subjective tags first, pattern tags last)
+        tagsToShow.forEach(tag => {
             const tagElement = document.createElement('span');
             tagElement.className = 'tags-hover-tag';
+
+            // Check if this is a pattern tag
+            const isPatternTag = tag.toLowerCase().startsWith('pattern:');
+            
+            // Apply blue background for pattern tags
+            if (isPatternTag) {
+                tagElement.style.backgroundColor = '#007bff';
+                tagElement.style.color = '#fff';
+                tagElement.style.border = '1px solid #0056b3';
+            }
 
             // Check if this tag matches any of the search tags
             const tagLower = tag.toLowerCase();
@@ -2024,8 +2041,11 @@
 
                 // In exact word mode, highlight the whole tag
                 if (exactWordMode) {
-                    tagElement.style.backgroundColor = '#ffd700';
-                    tagElement.style.color = '#000';
+                    // For pattern tags, keep blue background but add gold border
+                    if (!isPatternTag) {
+                        tagElement.style.backgroundColor = '#ffd700';
+                        tagElement.style.color = '#000';
+                    }
                     tagElement.style.fontWeight = '600';
                     tagElement.textContent = tag;
                 } else {
@@ -4141,9 +4161,9 @@
 
     function displayLightboxMetadata(index) {
         const metadataPanel = document.getElementById('lightbox-metadata-panel');
-        if (!metadataPanel || index >= libraryImages.length || index < 0) return;
+        if (!metadataPanel || index >= currentLightboxImages.length || index < 0) return;
 
-        const image = libraryImages[index];
+        const image = currentLightboxImages[index];
         const tags = image.tags || [];
 
         // Extract metadata from tags
@@ -4308,7 +4328,7 @@
                 dropdownOptions.appendChild(noPatternsOption);
             } else {
                 // Get current pattern from image
-                const image = libraryImages[index];
+                const image = currentLightboxImages[index];
                 const tags = image.tags || [];
                 let currentPattern = '';
                 tags.forEach(tag => {
@@ -4419,7 +4439,7 @@
 
     // Select pattern in lightbox
     async function selectLightboxPattern(index, patternId, patternName, patternFilepath) {
-        const image = libraryImages[index];
+        const image = currentLightboxImages[index];
         if (!image) return;
 
         // Update dropdown text
@@ -4627,12 +4647,49 @@
         lightboxDirty = false;
         // Reset project view flag if not already set (for regular library view)
         // isProjectViewLightbox will be set to true in openProjectImageLightbox
-        currentImageIndex = index;
-        imageSources = libraryImages.map(img => img.src);
-        modalImg.src = imageSources[currentImageIndex];
-        displayLightboxMetadata(index);
-        displayLightboxTags(index);
-        renderLightboxFreqFloating(libraryImages[index].id);
+        
+        // In pool view, create a properly formatted array from allImagesToDisplay
+        // that matches libraryImages structure (with src property)
+        if (isPoolView && allImagesToDisplay.length > 0) {
+            // Format allImagesToDisplay to match libraryImages structure
+            currentLightboxImages = allImagesToDisplay.map((img, idx) => {
+                // Try to find matching image in libraryImages first (has src already)
+                const libImg = libraryImages.find(lib => lib.id === img.id);
+                if (libImg) {
+                    return libImg;
+                }
+                // Otherwise create formatted object from raw image
+                return {
+                    src: `${API_URL}/${img.filepath.replace(/\\/g, '/')}`,
+                    index: idx,
+                    tags: img.tags || [],
+                    id: img.id,
+                    loaded: true,
+                    filepath: img.filepath
+                };
+            });
+            currentImageIndex = index;
+        } else {
+            // Regular library view - use libraryImages directly
+            currentLightboxImages = libraryImages;
+            currentImageIndex = index;
+        }
+        
+        // Ensure all images have src property
+        imageSources = currentLightboxImages.map(img => {
+            if (img.src) return img.src;
+            if (img.filepath) return `${API_URL}/${img.filepath.replace(/\\/g, '/')}`;
+            return '';
+        });
+        
+        if (currentImageIndex >= 0 && currentImageIndex < imageSources.length && currentImageIndex < currentLightboxImages.length) {
+            modalImg.src = imageSources[currentImageIndex];
+            displayLightboxMetadata(currentImageIndex);
+            displayLightboxTags(currentImageIndex);
+            if (currentLightboxImages[currentImageIndex]) {
+                renderLightboxFreqFloating(currentLightboxImages[currentImageIndex].id);
+            }
+        }
         modal.classList.remove('is-hidden');
         // In project view, keep lock button hidden (read-only mode)
         if (isProjectViewLightbox) {
@@ -4655,8 +4712,8 @@
         modalImg.src = imageSources[currentImageIndex];
         displayLightboxMetadata(index);
         displayLightboxTags(index);
-        if (libraryImages[index]) {
-            renderLightboxFreqFloating(libraryImages[index].id);
+        if (currentLightboxImages[index]) {
+            renderLightboxFreqFloating(currentLightboxImages[index].id);
         }
         // In project view, keep lock button hidden (read-only mode)
         if (isProjectViewLightbox) {
@@ -5171,13 +5228,32 @@
             .filter(t => t);
     }
 
+    // Get current displayed tags in lightbox (what user actually sees)
+    function getCurrentDisplayedTags(index) {
+        if (index >= currentLightboxImages.length || index < 0) {
+            return [];
+        }
+
+        const currentImage = currentLightboxImages[index];
+        // Get all tags (including pattern tags and subjective tags)
+        const allImageTags = currentImage.tags || [];
+        
+        // Apply pending removals
+        const tagsAfterRemoval = allImageTags.filter(tag => !pendingRemoveTags.has(tag));
+        
+        // Add pending additions
+        const displayedTags = [...new Set([...tagsAfterRemoval, ...pendingAddTags])];
+        
+        return displayedTags;
+    }
+
     function displayLightboxTags(index) {
-        if (index >= libraryImages.length || index < 0) {
+        if (index >= currentLightboxImages.length || index < 0) {
             lightboxTags.innerHTML = '';
             return;
         }
 
-        const currentImage = libraryImages[index];
+        const currentImage = currentLightboxImages[index];
         // Show subjective/feeling tags and pattern tags (exclude other metadata with prefixes)
         const imageTags = (currentImage.tags || []).filter(t => {
             // Always include pattern tags
@@ -5333,7 +5409,8 @@
 
     // Remove a single tag from an image with confirmation (used in lightbox)
     function handleRemoveTagFromImage(imageId, tagText) {
-        const image = libraryImages.find(img => img.id === imageId);
+        // Find image in currentLightboxImages (the currently displayed image)
+        const image = currentLightboxImages.find(img => img.id === imageId);
         if (!image || !tagDeleteConfirmModal) return;
         pendingTagDelete = { imageId, tagText };
         tagDeleteName.textContent = tagText;
@@ -5343,7 +5420,8 @@
     async function confirmRemoveTagFromImage() {
         if (!pendingTagDelete) return;
         const { imageId, tagText } = pendingTagDelete;
-        const image = libraryImages.find(img => img.id === imageId);
+        // Find image in currentLightboxImages (the currently displayed image)
+        const image = currentLightboxImages.find(img => img.id === imageId);
         if (!image) {
             pendingTagDelete = null;
             tagDeleteConfirmModal.classList.add('is-hidden');
@@ -5360,6 +5438,12 @@
         const newTags = (image.tags || []).filter(t => t !== tagText);
         image.tags = newTags;
         
+        // Also update in libraryImages for consistency
+        const libImage = libraryImages.find(img => img.id === image.id);
+        if (libImage) {
+            libImage.tags = newTags;
+        }
+        
         // Also update in allImagesToDisplay for consistency
         const imageInDisplay = allImagesToDisplay.find(img => img.id === image.id);
         if (imageInDisplay) {
@@ -5367,7 +5451,7 @@
         }
         
         lightboxDirty = true;
-        displayLightboxTags(currentPreviewIndex);
+        displayLightboxTags(currentImageIndex);
         
         // Show save button if unlocked
         if (lightboxSaveBtn && !lightboxLocked) {
@@ -5379,7 +5463,8 @@
     }
 
     async function handleAddTagToImage(imageId, tagText) {
-        const image = libraryImages.find(img => img.id === imageId);
+        // Find image in currentLightboxImages (the currently displayed image)
+        const image = currentLightboxImages.find(img => img.id === imageId);
         if (!image) return;
         const cleaned = tagText.trim();
         if (!cleaned) return;
@@ -5391,7 +5476,7 @@
         }
         pendingAddTags.add(cleaned);
         lightboxDirty = true;
-        displayLightboxTags(currentPreviewIndex);
+        displayLightboxTags(currentImageIndex);
         renderLightboxFreqFloating(imageId);
         return true;
     }
@@ -5423,7 +5508,7 @@
             pendingAddTags.clear();
             pendingRemoveTags.clear();
             lightboxDirty = false;
-            displayLightboxTags(currentPreviewIndex);
+            displayLightboxTags(currentImageIndex);
             renderLightboxFreqFloating(imageId);
             showLightboxToast('Tags saved');
             if (closeAfterSave) {
@@ -5437,63 +5522,49 @@
 
     // Save all lightbox changes (metadata and tags)
     async function saveAllLightboxChanges() {
-        if (currentPreviewIndex < 0 || currentPreviewIndex >= libraryImages.length) {
+        if (currentImageIndex < 0 || currentImageIndex >= currentLightboxImages.length) {
             showLightboxToast('No image selected');
             return;
         }
 
-        const image = libraryImages[currentPreviewIndex];
-        if (!image) {
+        // Get the currently displayed image
+        const image = currentLightboxImages[currentImageIndex];
+        if (!image || !image.id) {
             showLightboxToast('Image not found');
             return;
         }
 
-        if (!image.id) {
-            console.error('Image missing ID:', image);
-            alert('Error: Image is missing an ID. Cannot save changes.');
+        // Simple logic: just add pending tags to the current image
+        if (pendingAddTags.size === 0 && pendingRemoveTags.size === 0) {
+            showLightboxToast('Nothing to save');
             return;
         }
 
-        console.log('Starting save operation for image:', image.id);
         try {
-            // Collect metadata from fields
-            const metadataFields = ['book', 'page', 'row', 'column', 'type', 'material', 'width', 'length', 'brand', 'color', 'remark'];
-            const metadataTags = [];
+            // Get current tags
+            let currentTags = Array.isArray(image.tags) ? [...image.tags] : [];
             
-            metadataFields.forEach(field => {
-                const fieldElement = document.querySelector(`.lightbox-metadata-value[data-field="${field}"]`);
-                if (fieldElement) {
-                    const value = fieldElement.textContent.trim();
-                    if (value) {
-                        metadataTags.push(`${field}:${value}`);
-                    }
-                }
-            });
-
-            // Handle pattern field separately (it's a dropdown, not contenteditable)
-            const patternDropdownText = document.querySelector('.lightbox-pattern-dropdown-text');
-            if (patternDropdownText && patternDropdownText.textContent !== 'Select Pattern...') {
-                const patternName = patternDropdownText.textContent.trim();
-                if (patternName) {
-                    metadataTags.push(`pattern:${patternName}`);
-                }
+            // Apply pending removals
+            currentTags = currentTags.filter(tag => !pendingRemoveTags.has(tag));
+            
+            // Add pending additions
+            const newTags = [...new Set([...currentTags, ...pendingAddTags])];
+            
+            // Save tags to the image
+            await updateImageTags(image.id, newTags);
+            image.tags = newTags;
+            
+            // Update the image in libraryImages if it exists there
+            const libImage = libraryImages.find(img => img.id === image.id);
+            if (libImage) {
+                libImage.tags = newTags;
             }
-
-            // Get current tags and filter out old metadata tags
-            const metadataPrefixes = ['book:', 'page:', 'row:', 'column:', 'type:', 'material:', 'width:', 'length:', 'pattern:', 'brand:', 'color:', 'remark:'];
-            const currentTags = image.tags || [];
-            const nonMetadataTags = currentTags.filter(tag => {
-                const tagLower = tag.toLowerCase();
-                return !metadataPrefixes.some(prefix => tagLower.startsWith(prefix));
-            });
-
-            // Apply pending removals first, then add pending additions
-            const tagsAfterRemoval = nonMetadataTags.filter(tag => !pendingRemoveTags.has(tag));
-            const allTags = [...new Set([...tagsAfterRemoval, ...metadataTags, ...pendingAddTags])];
-
-            // Save tags
-            await updateImageTags(image.id, allTags);
-            image.tags = allTags;
+            
+            // Update the image in allImagesToDisplay if it exists there
+            const displayImage = allImagesToDisplay.find(img => img.id === image.id);
+            if (displayImage) {
+                displayImage.tags = newTags;
+            }
 
             // Increment feelings usage for subjective tags (no prefix)
             const newSubjectiveTags = [...pendingAddTags].filter(tag => !tag.includes(':'));
@@ -5513,11 +5584,9 @@
             pendingRemoveTags.clear();
             lightboxDirty = false;
             
-            // Note: updateImageTags now automatically updates all memory arrays via updateImageTagsInMemory
-            
             // Refresh display
-            displayLightboxTags(currentPreviewIndex);
-            displayLightboxMetadata(currentPreviewIndex);
+            displayLightboxTags(currentImageIndex);
+            displayLightboxMetadata(currentImageIndex);
             // Re-render frequency list with updated tags
             renderLightboxFreqFloating(image.id);
             
@@ -5527,16 +5596,11 @@
             }
             lockLightboxFields(); // This will change lock icon to locked state
             
-            showLightboxToast('All changes saved');
+            showLightboxToast('Tags saved');
         } catch (err) {
             console.error('Failed to save changes:', err);
             const errorMessage = err.message || err.toString() || 'Unknown error';
-            console.error('Error details:', {
-                message: errorMessage,
-                imageId: image?.id,
-                stack: err.stack
-            });
-            alert(`Failed to save changes: ${errorMessage}\n\nPlease check the browser console for more details.`);
+            alert(`Failed to save changes: ${errorMessage}`);
         }
     }
 
@@ -11000,7 +11064,7 @@
     // Lightbox save button event listener
     if (lightboxSaveBtn) {
         lightboxSaveBtn.addEventListener('click', () => {
-            if (currentPreviewIndex >= 0 && currentPreviewIndex < libraryImages.length) {
+            if (currentImageIndex >= 0 && currentImageIndex < currentLightboxImages.length) {
                 saveAllLightboxChanges();
             }
         });
