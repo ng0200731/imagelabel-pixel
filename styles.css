@@ -1195,6 +1195,73 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
   max-height: 90%;
 }
 
+/* Lightbox metadata panel */
+.lightbox-metadata-panel {
+  position: fixed;
+  left: 24px;
+  top: 80px;
+  width: 25vw;
+  max-width: 360px;
+  min-width: 240px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid #777;
+  border-radius: 8px;
+  padding: 10px;
+  color: #fff;
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.lightbox-metadata-section {
+  margin-bottom: 20px;
+}
+
+.lightbox-metadata-section h4 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.lightbox-metadata-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.lightbox-metadata-label {
+  font-size: 12px;
+  color: #ccc;
+  font-weight: 500;
+}
+
+.lightbox-metadata-value {
+  font-size: 14px;
+  color: #fff;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid #555;
+  border-radius: 4px;
+}
+
+.lightbox-metadata-value:empty::before {
+  content: '-';
+  color: #999;
+}
+
+/* Lightbox center container */
+.lightbox-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
 .modal-content {
   display: block;
   max-width: 90vw;

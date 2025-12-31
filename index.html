@@ -391,8 +391,13 @@
     <button id="lightbox-save-btn" class="lightbox-save-btn is-hidden" type="button">Save</button>
     <a class="prev">&#10094;</a>
     <div class="lightbox-content">
-      <img class="modal-content" id="lightbox-image">
-      <div id="lightbox-tags" class="lightbox-tags"></div>
+      <div id="lightbox-metadata-panel" class="lightbox-metadata-panel">
+        <!-- Metadata will be populated by JavaScript -->
+      </div>
+      <div class="lightbox-center">
+        <img class="modal-content" id="lightbox-image">
+        <div id="lightbox-tags" class="lightbox-tags"></div>
+      </div>
     </div>
     <a class="next">&#10095;</a>
   </div>
@@ -3846,12 +3851,120 @@
 
     // --- Library Lightbox Functions ---
 
+    function displayLightboxMetadata(index) {
+        const metadataPanel = document.getElementById('lightbox-metadata-panel');
+        if (!metadataPanel || index >= libraryImages.length || index < 0) return;
+
+        const image = libraryImages[index];
+        const tags = image.tags || [];
+
+        // Extract metadata from tags
+        const metadata = {
+            book: '',
+            page: '',
+            row: '',
+            column: '',
+            type: '',
+            material: '',
+            width: '',
+            length: '',
+            pattern: '',
+            brand: '',
+            color: '',
+            remark: ''
+        };
+
+        tags.forEach(tag => {
+            const tagLower = tag.toLowerCase();
+            if (tagLower.startsWith('book:')) metadata.book = tag.substring(5);
+            else if (tagLower.startsWith('page:')) metadata.page = tag.substring(5);
+            else if (tagLower.startsWith('row:')) metadata.row = tag.substring(4);
+            else if (tagLower.startsWith('column:')) metadata.column = tag.substring(7);
+            else if (tagLower.startsWith('type:')) metadata.type = tag.substring(5);
+            else if (tagLower.startsWith('material:')) metadata.material = tag.substring(9);
+            else if (tagLower.startsWith('width:')) metadata.width = tag.substring(6);
+            else if (tagLower.startsWith('length:')) metadata.length = tag.substring(7);
+            else if (tagLower.startsWith('pattern:')) metadata.pattern = tag.substring(8);
+            else if (tagLower.startsWith('brand:')) metadata.brand = tag.substring(6);
+            else if (tagLower.startsWith('color:')) metadata.color = tag.substring(6);
+            else if (tagLower.startsWith('remark:')) metadata.remark = tag.substring(7);
+        });
+
+        // Build HTML
+        let html = '<div class="lightbox-metadata-section">';
+        html += '<h4>Location</h4>';
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Book:</span>
+            <div class="lightbox-metadata-value">${metadata.book}</div>
+        </div>`;
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Page:</span>
+            <div class="lightbox-metadata-value">${metadata.page}</div>
+        </div>`;
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Row:</span>
+            <div class="lightbox-metadata-value">${metadata.row}</div>
+        </div>`;
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Column:</span>
+            <div class="lightbox-metadata-value">${metadata.column}</div>
+        </div>`;
+        html += '</div>';
+
+        html += '<div class="lightbox-metadata-section">';
+        html += '<h4>Item Details</h4>';
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Type:</span>
+            <div class="lightbox-metadata-value">${metadata.type}</div>
+        </div>`;
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Material:</span>
+            <div class="lightbox-metadata-value">${metadata.material}</div>
+        </div>`;
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Width (mm):</span>
+            <div class="lightbox-metadata-value">${metadata.width}</div>
+        </div>`;
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Length (mm):</span>
+            <div class="lightbox-metadata-value">${metadata.length}</div>
+        </div>`;
+        html += '</div>';
+
+        html += '<div class="lightbox-metadata-section">';
+        html += '<h4>Pattern</h4>';
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Pattern:</span>
+            <div class="lightbox-metadata-value">${metadata.pattern}</div>
+        </div>`;
+        html += '</div>';
+
+        html += '<div class="lightbox-metadata-section">';
+        html += '<h4>Other</h4>';
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Brand:</span>
+            <div class="lightbox-metadata-value">${metadata.brand}</div>
+        </div>`;
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Color:</span>
+            <div class="lightbox-metadata-value">${metadata.color}</div>
+        </div>`;
+        html += `<div class="lightbox-metadata-field">
+            <span class="lightbox-metadata-label">Remark:</span>
+            <div class="lightbox-metadata-value">${metadata.remark}</div>
+        </div>`;
+        html += '</div>';
+
+        metadataPanel.innerHTML = html;
+    }
+
     function openLibraryLightbox(index) {
         pendingAddTags.clear();
         lightboxDirty = false;
         currentImageIndex = index;
         imageSources = libraryImages.map(img => img.src);
         modalImg.src = imageSources[currentImageIndex];
+        displayLightboxMetadata(index);
         displayLightboxTags(index);
         renderLightboxFreqFloating(libraryImages[index].id);
         modal.classList.remove('is-hidden');
@@ -3863,6 +3976,7 @@
         if (index >= imageSources.length || index < 0) return;
         currentImageIndex = index;
         modalImg.src = imageSources[currentImageIndex];
+        displayLightboxMetadata(index);
         displayLightboxTags(index);
         if (libraryImages[index]) {
             renderLightboxFreqFloating(libraryImages[index].id);
