@@ -388,7 +388,7 @@
   <!-- Lightbox Modal -->
   <div id="lightbox-modal" class="modal is-hidden">
     <span class="modal-close">&times;</span>
-    <button id="lightbox-save-btn" class="lightbox-save-btn is-hidden" type="button">Save</button>
+    <button id="lightbox-lock-btn" class="lightbox-lock-btn is-hidden" type="button" title="Click to unlock editing">🔒</button>
     <a class="prev">&#10094;</a>
     <div class="lightbox-content">
       <div id="lightbox-metadata-panel" class="lightbox-metadata-panel">
@@ -1014,7 +1014,7 @@
     const closeModal = document.querySelector('.modal-close');
     const prevButton = document.querySelector('.prev');
     const nextButton = document.querySelector('.next');
-    const lightboxSaveBtn = document.getElementById('lightbox-save-btn');
+    const lightboxLockBtn = document.getElementById('lightbox-lock-btn');
     const uploadButton = document.getElementById('upload-button');
     const librarySearchInput = document.getElementById('library-search-input');
     const libraryGrid = document.getElementById('library-grid');
@@ -1188,6 +1188,7 @@
     let isSelectionPoolPreview = false; // Track if we're in Selection Pool preview mode
     let pendingAddTags = new Set(); // Track tags added in lightbox before saving
     let lightboxDirty = false; // Track if any tag was added or removed in lightbox
+    let lightboxLocked = true; // Track if lightbox fields are locked (default: locked)
 
     // --- Function Definitions ---
 
@@ -1681,6 +1682,137 @@
     
     // Initialize pattern field styles on page load
     addPatternFieldStyles();
+
+    // Add styles for lightbox lock button
+    function addLightboxLockButtonStyles() {
+        if (document.getElementById('lightbox-lock-button-styles')) return; // Already added
+        
+        const style = document.createElement('style');
+        style.id = 'lightbox-lock-button-styles';
+        style.textContent = `
+            .lightbox-lock-btn {
+                position: fixed;
+                top: 20px;
+                right: 80px;
+                z-index: 10001;
+                background-color: #4CAF50;
+                color: #ffffff;
+                border: none;
+                border-radius: 4px;
+                padding: 10px 20px;
+                font-size: 16px;
+                cursor: pointer;
+                font-weight: 500;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                transition: background-color 0.2s, box-shadow 0.2s;
+            }
+            .lightbox-lock-btn:hover {
+                background-color: #45a049;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            }
+            .lightbox-lock-btn:active {
+                background-color: #3d8b40;
+            }
+            .lightbox-lock-btn.is-hidden {
+                display: none;
+            }
+            .lightbox-pattern-dropdown-wrapper {
+                width: 100%;
+            }
+            .lightbox-pattern-dropdown {
+                position: relative;
+                width: 100%;
+            }
+            .lightbox-pattern-dropdown-toggle {
+                width: 100%;
+                padding: 6px 8px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 14px;
+                background: white;
+                cursor: pointer;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                min-height: 20px;
+            }
+            .lightbox-pattern-dropdown-toggle:hover {
+                border-color: #999;
+            }
+            .lightbox-pattern-dropdown-text {
+                flex: 1;
+            }
+            .lightbox-pattern-dropdown-arrow {
+                margin-left: 10px;
+                font-size: 12px;
+                color: #666;
+            }
+            .lightbox-pattern-dropdown-menu {
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: white;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                margin-top: 4px;
+                max-height: 300px;
+                overflow-y: auto;
+                z-index: 1000;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+            .lightbox-pattern-dropdown-menu.is-hidden {
+                display: none !important;
+            }
+            .lightbox-pattern-dropdown-options {
+                padding: 4px 0;
+            }
+            .lightbox-pattern-dropdown-option {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px;
+                cursor: pointer;
+                transition: background-color 0.2s;
+            }
+            .lightbox-pattern-dropdown-option:hover {
+                background-color: #f5f5f5;
+            }
+            .lightbox-pattern-dropdown-option.selected {
+                background-color: #e3f2fd;
+                border-left: 3px solid #2196f3;
+            }
+            .lightbox-pattern-option-thumbnail {
+                width: 40px;
+                height: 40px;
+                flex-shrink: 0;
+                border-radius: 4px;
+                overflow: hidden;
+                border: 1px solid #ddd;
+                background: #f5f5f5;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .lightbox-pattern-option-thumbnail img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            .lightbox-pattern-option-placeholder {
+                font-size: 20px;
+            }
+            .lightbox-pattern-option-name {
+                flex: 1;
+                font-size: 14px;
+                color: #333;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    // Initialize lightbox lock button styles on page load
+    addLightboxLockButtonStyles();
 
     // Show modal with all tags on hover
     function showAllTagsModal(card, image, event) {
@@ -3825,7 +3957,7 @@
         if (lightboxTags) lightboxTags.innerHTML = '';
         const freqFloating = document.getElementById('lightbox-freq-floating');
         if (freqFloating) freqFloating.remove();
-        if (lightboxSaveBtn) lightboxSaveBtn.classList.add('is-hidden');
+        if (lightboxLockBtn) lightboxLockBtn.classList.add('is-hidden');
         pendingAddTags.clear();
         lightboxDirty = false;
         
@@ -3846,7 +3978,7 @@
         if (freqFloating) freqFloating.remove();
         pendingAddTags.clear();
         lightboxDirty = false;
-        if (lightboxSaveBtn) lightboxSaveBtn.classList.add('is-hidden');
+        if (lightboxLockBtn) lightboxLockBtn.classList.add('is-hidden');
     }
 
     // --- Library Lightbox Functions ---
@@ -3890,24 +4022,24 @@
             else if (tagLower.startsWith('remark:')) metadata.remark = tag.substring(7);
         });
 
-        // Build HTML
+        // Build HTML with editable fields
         let html = '<div class="lightbox-metadata-section">';
         html += '<h4>Location</h4>';
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Book:</span>
-            <div class="lightbox-metadata-value">${metadata.book}</div>
+            <div class="lightbox-metadata-value" contenteditable="true" data-field="book">${metadata.book}</div>
         </div>`;
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Page:</span>
-            <div class="lightbox-metadata-value">${metadata.page}</div>
+            <div class="lightbox-metadata-value" contenteditable="true" data-field="page">${metadata.page}</div>
         </div>`;
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Row:</span>
-            <div class="lightbox-metadata-value">${metadata.row}</div>
+            <div class="lightbox-metadata-value" contenteditable="true" data-field="row">${metadata.row}</div>
         </div>`;
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Column:</span>
-            <div class="lightbox-metadata-value">${metadata.column}</div>
+            <div class="lightbox-metadata-value" contenteditable="true" data-field="column">${metadata.column}</div>
         </div>`;
         html += '</div>';
 
@@ -3915,19 +4047,19 @@
         html += '<h4>Item Details</h4>';
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Type:</span>
-            <div class="lightbox-metadata-value">${metadata.type}</div>
+            <div class="lightbox-metadata-value" contenteditable="true" data-field="type">${metadata.type}</div>
         </div>`;
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Material:</span>
-            <div class="lightbox-metadata-value">${metadata.material}</div>
+            <div class="lightbox-metadata-value" contenteditable="true" data-field="material">${metadata.material}</div>
         </div>`;
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Width (mm):</span>
-            <div class="lightbox-metadata-value">${metadata.width}</div>
+            <div class="lightbox-metadata-value" contenteditable="true" data-field="width">${metadata.width}</div>
         </div>`;
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Length (mm):</span>
-            <div class="lightbox-metadata-value">${metadata.length}</div>
+            <div class="lightbox-metadata-value" contenteditable="true" data-field="length">${metadata.length}</div>
         </div>`;
         html += '</div>';
 
@@ -3935,7 +4067,19 @@
         html += '<h4>Pattern</h4>';
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Pattern:</span>
-            <div class="lightbox-metadata-value">${metadata.pattern}</div>
+            <div class="lightbox-pattern-dropdown-wrapper">
+                <div class="lightbox-pattern-dropdown">
+                    <div class="lightbox-pattern-dropdown-toggle" data-field="pattern">
+                        <span class="lightbox-pattern-dropdown-text">${metadata.pattern || 'Select Pattern...'}</span>
+                        <span class="lightbox-pattern-dropdown-arrow">▼</span>
+                    </div>
+                    <div class="lightbox-pattern-dropdown-menu is-hidden">
+                        <div class="lightbox-pattern-dropdown-options">
+                            <!-- Options will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>`;
         html += '</div>';
 
@@ -3943,19 +4087,270 @@
         html += '<h4>Other</h4>';
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Brand:</span>
-            <div class="lightbox-metadata-value">${metadata.brand}</div>
+            <div class="lightbox-metadata-value" contenteditable="true" data-field="brand">${metadata.brand}</div>
         </div>`;
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Color:</span>
-            <div class="lightbox-metadata-value">${metadata.color}</div>
+            <div class="lightbox-metadata-value" contenteditable="true" data-field="color">${metadata.color}</div>
         </div>`;
         html += `<div class="lightbox-metadata-field">
             <span class="lightbox-metadata-label">Remark:</span>
-            <div class="lightbox-metadata-value">${metadata.remark}</div>
+            <div class="lightbox-metadata-value" contenteditable="true" data-field="remark">${metadata.remark}</div>
         </div>`;
         html += '</div>';
 
         metadataPanel.innerHTML = html;
+        
+        // Load patterns into dropdown and set up event listeners
+        setupLightboxPatternDropdown(index);
+    }
+
+    // Setup lightbox pattern dropdown
+    async function setupLightboxPatternDropdown(index) {
+        const dropdownToggle = document.querySelector('.lightbox-pattern-dropdown-toggle');
+        const dropdownMenu = document.querySelector('.lightbox-pattern-dropdown-menu');
+        const dropdownOptions = document.querySelector('.lightbox-pattern-dropdown-options');
+        const dropdownText = dropdownToggle ? dropdownToggle.querySelector('.lightbox-pattern-dropdown-text') : null;
+        
+        if (!dropdownToggle || !dropdownMenu || !dropdownOptions) return;
+
+        // Load patterns
+        try {
+            const sessionToken = localStorage.getItem('sessionToken');
+            const headers = {};
+            if (sessionToken) {
+                headers['Authorization'] = `Bearer ${sessionToken}`;
+            }
+
+            const response = await fetch(`${API_URL}/api/patterns`, {
+                method: 'GET',
+                headers: headers
+            });
+
+            if (!response.ok) {
+                console.error('Failed to load patterns:', response.status);
+                return;
+            }
+
+            const patterns = await response.json();
+            
+            // Clear existing options
+            dropdownOptions.innerHTML = '';
+
+            if (patterns.length === 0) {
+                const noPatternsOption = document.createElement('div');
+                noPatternsOption.className = 'lightbox-pattern-dropdown-option';
+                noPatternsOption.textContent = 'No patterns available';
+                noPatternsOption.style.padding = '10px';
+                noPatternsOption.style.color = '#999';
+                dropdownOptions.appendChild(noPatternsOption);
+            } else {
+                // Get current pattern from image
+                const image = libraryImages[index];
+                const tags = image.tags || [];
+                let currentPattern = '';
+                tags.forEach(tag => {
+                    if (tag.toLowerCase().startsWith('pattern:')) {
+                        currentPattern = tag.substring(8);
+                    }
+                });
+
+                // Add patterns to dropdown
+                patterns.forEach(pattern => {
+                    const option = document.createElement('div');
+                    option.className = 'lightbox-pattern-dropdown-option';
+                    option.dataset.patternId = pattern.id;
+                    option.dataset.patternName = pattern.name || 'Unnamed Pattern';
+                    option.dataset.patternFilepath = pattern.filepath;
+                    
+                    // Mark as selected if this matches current pattern
+                    if (pattern.name === currentPattern) {
+                        option.classList.add('selected');
+                    }
+                    
+                    // Create thumbnail container
+                    const thumbnailContainer = document.createElement('div');
+                    thumbnailContainer.className = 'lightbox-pattern-option-thumbnail';
+                    
+                    const img = document.createElement('img');
+                    const filename = pattern.filepath.split(/[/\\]/).pop();
+                    img.src = `${API_URL}/uploads/patterns/${filename}`;
+                    img.alt = pattern.name || 'Pattern';
+                    img.onerror = function() {
+                        this.style.display = 'none';
+                        const placeholder = document.createElement('div');
+                        placeholder.className = 'lightbox-pattern-option-placeholder';
+                        placeholder.innerHTML = '📄';
+                        thumbnailContainer.appendChild(placeholder);
+                    };
+                    
+                    thumbnailContainer.appendChild(img);
+                    
+                    // Create name container
+                    const nameContainer = document.createElement('div');
+                    nameContainer.className = 'lightbox-pattern-option-name';
+                    nameContainer.textContent = pattern.name || 'Unnamed Pattern';
+                    
+                    option.appendChild(thumbnailContainer);
+                    option.appendChild(nameContainer);
+                    
+                    // Add click handler
+                    option.addEventListener('click', async () => {
+                        if (lightboxLocked) {
+                            showLightboxToast('Fields are locked. Click the lock icon to unlock.');
+                            return;
+                        }
+                        await selectLightboxPattern(index, pattern.id, pattern.name || 'Unnamed Pattern');
+                    });
+                    
+                    dropdownOptions.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading patterns into lightbox dropdown:', error);
+        }
+
+        // Toggle dropdown on click
+        dropdownToggle.addEventListener('click', (e) => {
+            if (lightboxLocked) {
+                showLightboxToast('Fields are locked. Click the lock icon to unlock.');
+                return;
+            }
+            e.stopPropagation();
+            dropdownMenu.classList.toggle('is-hidden');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (dropdownMenu && !dropdownMenu.contains(e.target) && 
+                dropdownToggle && !dropdownToggle.contains(e.target)) {
+                dropdownMenu.classList.add('is-hidden');
+            }
+        });
+    }
+
+    // Select pattern in lightbox
+    async function selectLightboxPattern(index, patternId, patternName) {
+        const image = libraryImages[index];
+        if (!image) return;
+
+        // Update dropdown text
+        const dropdownText = document.querySelector('.lightbox-pattern-dropdown-text');
+        if (dropdownText) {
+            dropdownText.textContent = patternName;
+        }
+
+        // Update selected state in dropdown
+        const allOptions = document.querySelectorAll('.lightbox-pattern-dropdown-option');
+        allOptions.forEach(opt => opt.classList.remove('selected'));
+        const selectedOption = document.querySelector(`[data-pattern-id="${patternId}"]`);
+        if (selectedOption) {
+            selectedOption.classList.add('selected');
+        }
+
+        // Hide dropdown
+        const dropdownMenu = document.querySelector('.lightbox-pattern-dropdown-menu');
+        if (dropdownMenu) {
+            dropdownMenu.classList.add('is-hidden');
+        }
+
+        // Update image tags - remove old pattern tag and add new one
+        const tags = image.tags || [];
+        const newTags = tags.filter(tag => !tag.toLowerCase().startsWith('pattern:'));
+        newTags.push(`pattern:${patternName}`);
+
+        try {
+            await updateImageTags(image.id, newTags);
+            image.tags = newTags;
+            showLightboxToast('Pattern updated');
+        } catch (err) {
+            console.error('Failed to update pattern:', err);
+            alert('Failed to update pattern. Please try again.');
+        }
+    }
+
+    // Lock all lightbox fields (metadata, frequency panel, tag input)
+    function lockLightboxFields() {
+        lightboxLocked = true;
+        if (lightboxLockBtn) {
+            lightboxLockBtn.textContent = '🔒';
+            lightboxLockBtn.title = 'Click to unlock editing';
+        }
+
+        // Lock metadata fields
+        const metadataValues = document.querySelectorAll('.lightbox-metadata-value');
+        metadataValues.forEach(field => {
+            field.contentEditable = 'false';
+            field.style.pointerEvents = 'none';
+            field.style.opacity = '0.7';
+            field.style.cursor = 'not-allowed';
+        });
+
+        // Lock frequency panel items
+        const freqItems = document.querySelectorAll('.lightbox-freq-item');
+        freqItems.forEach(item => {
+            item.style.pointerEvents = 'none';
+            item.style.opacity = '0.5';
+            item.style.cursor = 'not-allowed';
+        });
+
+        // Lock tag input field
+        const tagInput = document.querySelector('.lightbox-tag-add input');
+        if (tagInput) {
+            tagInput.disabled = true;
+            tagInput.style.opacity = '0.5';
+            tagInput.style.cursor = 'not-allowed';
+        }
+
+        // Lock pattern dropdown
+        const patternDropdownToggle = document.querySelector('.lightbox-pattern-dropdown-toggle');
+        if (patternDropdownToggle) {
+            patternDropdownToggle.style.pointerEvents = 'none';
+            patternDropdownToggle.style.opacity = '0.7';
+            patternDropdownToggle.style.cursor = 'not-allowed';
+        }
+    }
+
+    // Unlock all lightbox fields
+    function unlockLightboxFields() {
+        lightboxLocked = false;
+        if (lightboxLockBtn) {
+            lightboxLockBtn.textContent = '🔓';
+            lightboxLockBtn.title = 'Click to lock editing';
+        }
+
+        // Unlock metadata fields
+        const metadataValues = document.querySelectorAll('.lightbox-metadata-value');
+        metadataValues.forEach(field => {
+            field.contentEditable = 'true';
+            field.style.pointerEvents = 'auto';
+            field.style.opacity = '1';
+            field.style.cursor = 'text';
+        });
+
+        // Unlock frequency panel items
+        const freqItems = document.querySelectorAll('.lightbox-freq-item');
+        freqItems.forEach(item => {
+            item.style.pointerEvents = 'auto';
+            item.style.opacity = '1';
+            item.style.cursor = 'pointer';
+        });
+
+        // Unlock tag input field
+        const tagInput = document.querySelector('.lightbox-tag-add input');
+        if (tagInput) {
+            tagInput.disabled = false;
+            tagInput.style.opacity = '1';
+            tagInput.style.cursor = 'text';
+        }
+
+        // Unlock pattern dropdown
+        const patternDropdownToggle = document.querySelector('.lightbox-pattern-dropdown-toggle');
+        if (patternDropdownToggle) {
+            patternDropdownToggle.style.pointerEvents = 'auto';
+            patternDropdownToggle.style.opacity = '1';
+            patternDropdownToggle.style.cursor = 'pointer';
+        }
     }
 
     function openLibraryLightbox(index) {
@@ -3968,7 +4363,11 @@
         displayLightboxTags(index);
         renderLightboxFreqFloating(libraryImages[index].id);
         modal.classList.remove('is-hidden');
-        if (lightboxSaveBtn) lightboxSaveBtn.classList.remove('is-hidden');
+        if (lightboxLockBtn) lightboxLockBtn.classList.remove('is-hidden');
+        // Lock all fields after rendering (with small delay to ensure DOM is ready)
+        setTimeout(() => {
+            lockLightboxFields();
+        }, 100);
         updateArrowVisibility();
     }
 
@@ -3981,7 +4380,11 @@
         if (libraryImages[index]) {
             renderLightboxFreqFloating(libraryImages[index].id);
         }
-        if (lightboxSaveBtn) lightboxSaveBtn.classList.remove('is-hidden');
+        if (lightboxLockBtn) lightboxLockBtn.classList.remove('is-hidden');
+        // Lock all fields after rendering (with small delay to ensure DOM is ready)
+        setTimeout(() => {
+            lockLightboxFields();
+        }, 100);
         updateArrowVisibility();
     }
 
@@ -4579,6 +4982,10 @@
         addInput.placeholder = 'Add new tag (press Enter/Tab)';
 
         const commitAdd = async () => {
+            if (lightboxLocked) {
+                showLightboxToast('Fields are locked. Click the lock icon to unlock.');
+                return;
+            }
             const value = (addInput.value || '').trim();
             if (!value) return;
             const added = await handleAddTagToImage(currentImage.id, value);
@@ -4761,6 +5168,10 @@
                     row.classList.add('disabled');
                 }
                 row.addEventListener('click', () => {
+                    if (lightboxLocked) {
+                        showLightboxToast('Fields are locked. Click the lock icon to unlock.');
+                        return;
+                    }
                     if (row.classList.contains('disabled')) {
                         showLightboxToast('Tag already added');
                         return;
@@ -10005,11 +10416,16 @@
     if (tagDeleteConfirmBtn) {
         tagDeleteConfirmBtn.addEventListener('click', confirmRemoveTagFromImage);
     }
-    if (lightboxSaveBtn) {
-        lightboxSaveBtn.addEventListener('click', () => {
-            const current = libraryImages[currentImageIndex];
-            if (current) {
-                saveLightboxTagChanges(current.id, { closeAfterSave: true });
+    if (lightboxLockBtn) {
+        lightboxLockBtn.addEventListener('click', () => {
+            if (lightboxLocked) {
+                // Show confirmation popup to unlock
+                if (confirm('Do you want to unlock editing? All fields will become editable.')) {
+                    unlockLightboxFields();
+                }
+            } else {
+                // Lock the fields
+                lockLightboxFields();
             }
         });
     }
