@@ -1216,6 +1216,7 @@
     let currentPreviewIndex = 0; // Current image index in preview
     let isSelectionPoolPreview = false; // Track if we're in Selection Pool preview mode
     let pendingAddTags = new Set(); // Track tags added in lightbox before saving
+    let pendingRemoveTags = new Set(); // Track tags removed in lightbox before saving
     let lightboxDirty = false; // Track if any tag was added or removed in lightbox
     let lightboxLocked = true; // Track if lightbox fields are locked (default: locked)
     let isProjectViewLightbox = false; // Track if lightbox is opened from project view (read-only mode)
@@ -4110,6 +4111,7 @@
         if (lightboxLockBtn) lightboxLockBtn.classList.add('is-hidden');
         if (lightboxSaveBtn) lightboxSaveBtn.classList.add('is-hidden');
         pendingAddTags.clear();
+        pendingRemoveTags.clear();
         lightboxDirty = false;
         
         modal.classList.remove('is-hidden');
@@ -4128,6 +4130,7 @@
         const freqFloating = document.getElementById('lightbox-freq-floating');
         if (freqFloating) freqFloating.remove();
         pendingAddTags.clear();
+        pendingRemoveTags.clear();
         lightboxDirty = false;
         isProjectViewLightbox = false; // Reset project view flag
         if (lightboxLockBtn) lightboxLockBtn.classList.add('is-hidden');
@@ -4620,6 +4623,7 @@
 
     function openLibraryLightbox(index) {
         pendingAddTags.clear();
+        pendingRemoveTags.clear();
         lightboxDirty = false;
         // Reset project view flag if not already set (for regular library view)
         // isProjectViewLightbox will be set to true in openProjectImageLightbox
@@ -5187,8 +5191,9 @@
         const tagList = document.createElement('div');
         tagList.className = 'lightbox-tag-list';
 
-        // Render existing + pending chips
-        const allTagSet = new Set([...imageTags, ...pendingAddTags]);
+        // Render existing + pending chips, excluding pending removals
+        const tagsAfterRemoval = imageTags.filter(tag => !pendingRemoveTags.has(tag));
+        const allTagSet = new Set([...tagsAfterRemoval, ...pendingAddTags]);
         if (allTagSet.size === 0) {
             const empty = document.createElement('span');
             empty.className = 'no-tags';
@@ -5334,25 +5339,33 @@
             tagDeleteConfirmModal.classList.add('is-hidden');
             return;
         }
+        
+        // Remove from pending adds if it was there
+        pendingAddTags.delete(tagText);
+        
+        // Add to pending removes (don't save immediately, wait for save button)
+        pendingRemoveTags.add(tagText);
+        
+        // Update local image tags for display
         const newTags = (image.tags || []).filter(t => t !== tagText);
-        try {
-            await updateImageTags(imageId, newTags);
-            image.tags = newTags;
-            pendingAddTags.delete(tagText);
-            lightboxDirty = true;
-            displayLightboxTags(currentPreviewIndex);
-            // Update feelings frequency if this is a subjective tag
-            if (!isObjectiveTag(tagText)) {
-                await persistFeelingsUsageDecrement([tagText]);
-                await fetchSubjFrequencies();
-            }
-        } catch (err) {
-            console.error('Failed to remove tag from image:', err);
-            alert('Failed to remove tag. Please try again.');
-        } finally {
-            pendingTagDelete = null;
-            tagDeleteConfirmModal.classList.add('is-hidden');
+        image.tags = newTags;
+        
+        // Also update in allImagesToDisplay for consistency
+        const imageInDisplay = allImagesToDisplay.find(img => img.id === image.id);
+        if (imageInDisplay) {
+            imageInDisplay.tags = newTags;
         }
+        
+        lightboxDirty = true;
+        displayLightboxTags(currentPreviewIndex);
+        
+        // Show save button if unlocked
+        if (lightboxSaveBtn && !lightboxLocked) {
+            lightboxSaveBtn.classList.remove('is-hidden');
+        }
+        
+        pendingTagDelete = null;
+        tagDeleteConfirmModal.classList.add('is-hidden');
     }
 
     async function handleAddTagToImage(imageId, tagText) {
@@ -5398,6 +5411,7 @@
                 await fetchSubjFrequencies();
             }
             pendingAddTags.clear();
+            pendingRemoveTags.clear();
             lightboxDirty = false;
             displayLightboxTags(currentPreviewIndex);
             renderLightboxFreqFloating(imageId);
@@ -5463,8 +5477,9 @@
                 return !metadataPrefixes.some(prefix => tagLower.startsWith(prefix));
             });
 
-            // Combine non-metadata tags, new metadata tags, and pending tags
-            const allTags = [...new Set([...nonMetadataTags, ...metadataTags, ...pendingAddTags])];
+            // Apply pending removals first, then add pending additions
+            const tagsAfterRemoval = nonMetadataTags.filter(tag => !pendingRemoveTags.has(tag));
+            const allTags = [...new Set([...tagsAfterRemoval, ...metadataTags, ...pendingAddTags])];
 
             // Save tags
             await updateImageTags(image.id, allTags);
@@ -5477,7 +5492,15 @@
                 await fetchSubjFrequencies();
             }
 
+            // Update feelings frequency for removed subjective tags
+            const removedSubjectiveTags = Array.from(pendingRemoveTags).filter(tag => !isObjectiveTag(tag));
+            if (removedSubjectiveTags.length > 0) {
+                await persistFeelingsUsageDecrement(removedSubjectiveTags);
+                await fetchSubjFrequencies();
+            }
+
             pendingAddTags.clear();
+            pendingRemoveTags.clear();
             lightboxDirty = false;
             
             // Note: updateImageTags now automatically updates all memory arrays via updateImageTagsInMemory
@@ -6655,8 +6678,9 @@
         if (freqFloating) {
             freqFloating.remove();
         }
-        // Clear pending adds on close
+        // Clear pending adds and removes on close
         pendingAddTags.clear();
+        pendingRemoveTags.clear();
     }
 
     // Show real-size overlay (strict 1:1 based on mm dimensions)
