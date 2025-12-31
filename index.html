@@ -1218,6 +1218,7 @@
     let pendingAddTags = new Set(); // Track tags added in lightbox before saving
     let lightboxDirty = false; // Track if any tag was added or removed in lightbox
     let lightboxLocked = true; // Track if lightbox fields are locked (default: locked)
+    let isProjectViewLightbox = false; // Track if lightbox is opened from project view (read-only mode)
 
     // --- Function Definitions ---
 
@@ -4128,6 +4129,7 @@
         if (freqFloating) freqFloating.remove();
         pendingAddTags.clear();
         lightboxDirty = false;
+        isProjectViewLightbox = false; // Reset project view flag
         if (lightboxLockBtn) lightboxLockBtn.classList.add('is-hidden');
         if (lightboxSaveBtn) lightboxSaveBtn.classList.add('is-hidden');
     }
@@ -4619,6 +4621,8 @@
     function openLibraryLightbox(index) {
         pendingAddTags.clear();
         lightboxDirty = false;
+        // Reset project view flag if not already set (for regular library view)
+        // isProjectViewLightbox will be set to true in openProjectImageLightbox
         currentImageIndex = index;
         imageSources = libraryImages.map(img => img.src);
         modalImg.src = imageSources[currentImageIndex];
@@ -4626,8 +4630,14 @@
         displayLightboxTags(index);
         renderLightboxFreqFloating(libraryImages[index].id);
         modal.classList.remove('is-hidden');
-        if (lightboxLockBtn) lightboxLockBtn.classList.remove('is-hidden');
-        if (lightboxSaveBtn && !lightboxLocked) lightboxSaveBtn.classList.remove('is-hidden');
+        // In project view, keep lock button hidden (read-only mode)
+        if (isProjectViewLightbox) {
+            if (lightboxLockBtn) lightboxLockBtn.classList.add('is-hidden');
+            if (lightboxSaveBtn) lightboxSaveBtn.classList.add('is-hidden');
+        } else {
+            if (lightboxLockBtn) lightboxLockBtn.classList.remove('is-hidden');
+            if (lightboxSaveBtn && !lightboxLocked) lightboxSaveBtn.classList.remove('is-hidden');
+        }
         // Lock all fields after rendering (with small delay to ensure DOM is ready)
         setTimeout(() => {
             lockLightboxFields();
@@ -4644,8 +4654,14 @@
         if (libraryImages[index]) {
             renderLightboxFreqFloating(libraryImages[index].id);
         }
-        if (lightboxLockBtn) lightboxLockBtn.classList.remove('is-hidden');
-        if (lightboxSaveBtn && !lightboxLocked) lightboxSaveBtn.classList.remove('is-hidden');
+        // In project view, keep lock button hidden (read-only mode)
+        if (isProjectViewLightbox) {
+            if (lightboxLockBtn) lightboxLockBtn.classList.add('is-hidden');
+            if (lightboxSaveBtn) lightboxSaveBtn.classList.add('is-hidden');
+        } else {
+            if (lightboxLockBtn) lightboxLockBtn.classList.remove('is-hidden');
+            if (lightboxSaveBtn && !lightboxLocked) lightboxSaveBtn.classList.remove('is-hidden');
+        }
         // Lock all fields after rendering (with small delay to ensure DOM is ready)
         setTimeout(() => {
             lockLightboxFields();
@@ -6539,7 +6555,27 @@
 
         // Temporarily set for lightbox navigation
         libraryImages = formattedImages;
+        
+        // Mark as project view (read-only mode)
+        isProjectViewLightbox = true;
+        lightboxLocked = true;
+        
+        // Open lightbox
         openLibraryLightbox(imageIndex);
+        
+        // Hide lock button and ensure all fields stay locked (project view is read-only)
+        setTimeout(() => {
+            // Hide lock button - no editing allowed in project view
+            if (lightboxLockBtn) {
+                lightboxLockBtn.classList.add('is-hidden');
+            }
+            // Hide save button as well
+            if (lightboxSaveBtn) {
+                lightboxSaveBtn.classList.add('is-hidden');
+            }
+            // Lock all fields
+            lockLightboxFields();
+        }, 150);
     }
 
     function filterProjects(searchTerm) {
