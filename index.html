@@ -4459,18 +4459,26 @@
             selectedPatternPreview.classList.remove('is-hidden');
         }
 
-        // Update image tags - remove old pattern tag and add new one
+        // Update image tags in memory only (don't save yet) - remove old pattern tag and add new one
         const tags = image.tags || [];
         const newTags = tags.filter(tag => !tag.toLowerCase().startsWith('pattern:'));
         newTags.push(`pattern:${patternName}`);
-
-        try {
-            await updateImageTags(image.id, newTags);
-            image.tags = newTags;
-            showLightboxToast('Pattern updated');
-        } catch (err) {
-            console.error('Failed to update pattern:', err);
-            alert('Failed to update pattern. Please try again.');
+        
+        // Update local image object (for UI display)
+        image.tags = newTags;
+        
+        // Also update in allImagesToDisplay for consistency
+        const imageInDisplay = allImagesToDisplay.find(img => img.id === image.id);
+        if (imageInDisplay) {
+            imageInDisplay.tags = newTags;
+        }
+        
+        // Mark as dirty so save button appears - pattern will be saved when user clicks save
+        lightboxDirty = true;
+        
+        // Show save button if it exists and fields are unlocked
+        if (lightboxSaveBtn && !lightboxLocked) {
+            lightboxSaveBtn.classList.remove('is-hidden');
         }
     }
 
@@ -5435,11 +5443,7 @@
             pendingAddTags.clear();
             lightboxDirty = false;
             
-            // Ensure the image in libraryImages array is updated (in case it's a different reference)
-            const imageInArray = libraryImages.find(img => img.id === image.id);
-            if (imageInArray) {
-                imageInArray.tags = allTags;
-            }
+            // Note: updateImageTags now automatically updates all memory arrays via updateImageTagsInMemory
             
             // Refresh display
             displayLightboxTags(currentPreviewIndex);
@@ -8753,6 +8757,23 @@
         }
     }
 
+    // Helper function to update tags in all relevant image arrays
+    function updateImageTagsInMemory(imageId, tags) {
+        // Update in libraryImages array
+        const imageInLibrary = libraryImages.find(img => img.id === imageId);
+        if (imageInLibrary) {
+            imageInLibrary.tags = tags;
+        }
+        
+        // Update in allImagesToDisplay array (used by selection pool)
+        const imageInDisplay = allImagesToDisplay.find(img => img.id === imageId);
+        if (imageInDisplay) {
+            imageInDisplay.tags = tags;
+        }
+        
+        console.log(`Updated tags in memory for image ${imageId}`);
+    }
+
     async function updateImageTags(imageId, tags) {
         if (!imageId || isNaN(imageId)) {
             throw new Error(`Invalid image ID: ${imageId}`);
@@ -8811,6 +8832,10 @@
                 result = { success: true };
             }
             console.log(`Successfully updated tags for image ${imageId}:`, result);
+            
+            // Update tags in all memory arrays after successful API call
+            updateImageTagsInMemory(imageId, tags);
+            
             return result;
         } catch (error) {
             console.error(`Network or parsing error for image ${imageId}:`, error);
