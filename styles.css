@@ -1167,6 +1167,37 @@ body:has(#page-library:not(.is-hidden)) #page-upload {
 
 
 
+/* Lightbox Lock Button */
+.lightbox-lock-btn {
+  position: fixed;
+  top: 20px;
+  right: 80px;
+  z-index: 10001;
+  background-color: #4CAF50;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.lightbox-lock-btn:hover {
+  background-color: #45a049;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.lightbox-lock-btn:active {
+  background-color: #3d8b40;
+}
+
+.lightbox-lock-btn.is-hidden {
+  display: none;
+}
+
 /* Lightbox Modal */
 .modal {
   position: fixed;

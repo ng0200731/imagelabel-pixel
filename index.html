@@ -388,7 +388,12 @@
   <!-- Lightbox Modal -->
   <div id="lightbox-modal" class="modal is-hidden">
     <span class="modal-close">&times;</span>
-    <button id="lightbox-lock-btn" class="lightbox-lock-btn is-hidden" type="button" title="Click to unlock editing">🔒</button>
+    <button id="lightbox-lock-btn" class="lightbox-lock-btn is-hidden" type="button" title="Click to unlock editing">
+        <svg class="lock-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+    </button>
     <a class="prev">&#10094;</a>
     <div class="lightbox-content">
       <div id="lightbox-metadata-panel" class="lightbox-metadata-panel">
@@ -1683,39 +1688,13 @@
     // Initialize pattern field styles on page load
     addPatternFieldStyles();
 
-    // Add styles for lightbox lock button
-    function addLightboxLockButtonStyles() {
-        if (document.getElementById('lightbox-lock-button-styles')) return; // Already added
+    // Add styles for lightbox pattern dropdown
+    function addLightboxPatternDropdownStyles() {
+        if (document.getElementById('lightbox-pattern-dropdown-styles')) return; // Already added
         
         const style = document.createElement('style');
-        style.id = 'lightbox-lock-button-styles';
+        style.id = 'lightbox-pattern-dropdown-styles';
         style.textContent = `
-            .lightbox-lock-btn {
-                position: fixed;
-                top: 20px;
-                right: 80px;
-                z-index: 10001;
-                background-color: #4CAF50;
-                color: #ffffff;
-                border: none;
-                border-radius: 4px;
-                padding: 10px 20px;
-                font-size: 16px;
-                cursor: pointer;
-                font-weight: 500;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-                transition: background-color 0.2s, box-shadow 0.2s;
-            }
-            .lightbox-lock-btn:hover {
-                background-color: #45a049;
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            }
-            .lightbox-lock-btn:active {
-                background-color: #3d8b40;
-            }
-            .lightbox-lock-btn.is-hidden {
-                display: none;
-            }
             .lightbox-pattern-dropdown-wrapper {
                 width: 100%;
             }
@@ -1806,6 +1785,101 @@
                 flex: 1;
                 font-size: 14px;
                 color: #333;
+            }
+            .lightbox-selected-pattern-preview {
+                margin-top: 10px;
+                padding: 10px;
+                background: #f5f5f5;
+                border-radius: 4px;
+            }
+            .lightbox-selected-pattern-preview.is-hidden {
+                display: none !important;
+            }
+            .lightbox-pattern-preview-content {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .lightbox-pattern-thumbnail-preview {
+                width: 50px;
+                height: 50px;
+                object-fit: cover;
+                border-radius: 4px;
+                border: 1px solid #ddd;
+            }
+            .lightbox-pattern-name-preview {
+                font-weight: 500;
+                color: #333;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    // Initialize lightbox pattern dropdown styles on page load
+    addLightboxPatternDropdownStyles();
+
+    // Add styles for lightbox lock button
+    function addLightboxLockButtonStyles() {
+        if (document.getElementById('lightbox-lock-button-styles')) return; // Already added
+        
+        const style = document.createElement('style');
+        style.id = 'lightbox-lock-button-styles';
+        style.textContent = `
+            .lightbox-lock-btn {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 1001;
+                background: rgba(255, 255, 255, 0.95);
+                border: 2px solid #333;
+                border-radius: 50%;
+                width: 48px;
+                height: 48px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                padding: 0;
+            }
+            
+            .lightbox-lock-btn:hover {
+                background: rgba(255, 255, 255, 1);
+                transform: scale(1.1);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+            
+            .lightbox-lock-btn:active {
+                transform: scale(0.95);
+            }
+            
+            .lightbox-lock-btn.is-hidden {
+                display: none !important;
+            }
+            
+            .lightbox-lock-btn .lock-icon {
+                width: 20px;
+                height: 20px;
+                stroke: #333;
+                transition: stroke 0.3s ease;
+            }
+            
+            .lightbox-lock-btn:hover .lock-icon {
+                stroke: #2196f3;
+            }
+            
+            .lightbox-lock-btn.unlocked .lock-icon {
+                stroke: #4caf50;
+            }
+            
+            .lightbox-lock-btn.unlocked {
+                border-color: #4caf50;
+                background: rgba(76, 175, 80, 0.1);
+            }
+            
+            .lightbox-lock-btn.unlocked:hover {
+                background: rgba(76, 175, 80, 0.2);
             }
         `;
         document.head.appendChild(style);
@@ -4080,6 +4154,12 @@
                     </div>
                 </div>
             </div>
+            <div id="lightbox-selected-pattern-preview" class="lightbox-selected-pattern-preview is-hidden">
+                <div class="lightbox-pattern-preview-content">
+                    <img id="lightbox-selected-pattern-thumbnail" class="lightbox-pattern-thumbnail-preview" src="" alt="Pattern thumbnail" />
+                    <span id="lightbox-selected-pattern-name" class="lightbox-pattern-name-preview"></span>
+                </div>
+            </div>
         </div>`;
         html += '</div>';
 
@@ -4156,6 +4236,7 @@
                 });
 
                 // Add patterns to dropdown
+                let selectedPatternData = null;
                 patterns.forEach(pattern => {
                     const option = document.createElement('div');
                     option.className = 'lightbox-pattern-dropdown-option';
@@ -4166,6 +4247,7 @@
                     // Mark as selected if this matches current pattern
                     if (pattern.name === currentPattern) {
                         option.classList.add('selected');
+                        selectedPatternData = pattern;
                     }
                     
                     // Create thumbnail container
@@ -4200,11 +4282,35 @@
                             showLightboxToast('Fields are locked. Click the lock icon to unlock.');
                             return;
                         }
-                        await selectLightboxPattern(index, pattern.id, pattern.name || 'Unnamed Pattern');
+                        await selectLightboxPattern(index, pattern.id, pattern.name || 'Unnamed Pattern', pattern.filepath);
                     });
                     
                     dropdownOptions.appendChild(option);
                 });
+                
+                // Show preview if a pattern is already selected
+                if (selectedPatternData) {
+                    const selectedPatternPreview = document.getElementById('lightbox-selected-pattern-preview');
+                    const selectedPatternThumbnail = document.getElementById('lightbox-selected-pattern-thumbnail');
+                    const selectedPatternName = document.getElementById('lightbox-selected-pattern-name');
+                    
+                    if (selectedPatternName) {
+                        selectedPatternName.textContent = selectedPatternData.name || 'Unnamed Pattern';
+                    }
+                    
+                    if (selectedPatternThumbnail && selectedPatternData.filepath) {
+                        const filename = selectedPatternData.filepath.split(/[/\\]/).pop();
+                        selectedPatternThumbnail.src = `${API_URL}/uploads/patterns/${filename}`;
+                        selectedPatternThumbnail.onerror = function() {
+                            this.style.display = 'none';
+                        };
+                        selectedPatternThumbnail.style.display = 'block';
+                    }
+                    
+                    if (selectedPatternPreview) {
+                        selectedPatternPreview.classList.remove('is-hidden');
+                    }
+                }
             }
         } catch (error) {
             console.error('Error loading patterns into lightbox dropdown:', error);
@@ -4230,7 +4336,7 @@
     }
 
     // Select pattern in lightbox
-    async function selectLightboxPattern(index, patternId, patternName) {
+    async function selectLightboxPattern(index, patternId, patternName, patternFilepath) {
         const image = libraryImages[index];
         if (!image) return;
 
@@ -4248,10 +4354,32 @@
             selectedOption.classList.add('selected');
         }
 
-        // Hide dropdown
+        // Hide dropdown menu (close after selection)
         const dropdownMenu = document.querySelector('.lightbox-pattern-dropdown-menu');
         if (dropdownMenu) {
             dropdownMenu.classList.add('is-hidden');
+        }
+
+        // Show preview with thumbnail and name
+        const selectedPatternPreview = document.getElementById('lightbox-selected-pattern-preview');
+        const selectedPatternThumbnail = document.getElementById('lightbox-selected-pattern-thumbnail');
+        const selectedPatternName = document.getElementById('lightbox-selected-pattern-name');
+        
+        if (selectedPatternName) {
+            selectedPatternName.textContent = patternName;
+        }
+        
+        if (selectedPatternThumbnail && patternFilepath) {
+            const filename = patternFilepath.split(/[/\\]/).pop();
+            selectedPatternThumbnail.src = `${API_URL}/uploads/patterns/${filename}`;
+            selectedPatternThumbnail.onerror = function() {
+                this.style.display = 'none';
+            };
+            selectedPatternThumbnail.style.display = 'block';
+        }
+        
+        if (selectedPatternPreview) {
+            selectedPatternPreview.classList.remove('is-hidden');
         }
 
         // Update image tags - remove old pattern tag and add new one
@@ -4273,7 +4401,12 @@
     function lockLightboxFields() {
         lightboxLocked = true;
         if (lightboxLockBtn) {
-            lightboxLockBtn.textContent = '🔒';
+            // Update to locked icon (closed lock)
+            const lockIcon = lightboxLockBtn.querySelector('.lock-icon');
+            if (lockIcon) {
+                lockIcon.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>';
+            }
+            lightboxLockBtn.classList.remove('unlocked');
             lightboxLockBtn.title = 'Click to unlock editing';
         }
 
@@ -4315,7 +4448,12 @@
     function unlockLightboxFields() {
         lightboxLocked = false;
         if (lightboxLockBtn) {
-            lightboxLockBtn.textContent = '🔓';
+            // Update to unlocked icon (open lock - shackle is open)
+            const lockIcon = lightboxLockBtn.querySelector('.lock-icon');
+            if (lockIcon) {
+                lockIcon.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 5-5 5 5 0 0 1 5 5v4"></path><path d="M12 16v-2"></path>';
+            }
+            lightboxLockBtn.classList.add('unlocked');
             lightboxLockBtn.title = 'Click to lock editing';
         }
 
