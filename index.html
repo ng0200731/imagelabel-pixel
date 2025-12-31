@@ -394,6 +394,13 @@
             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
         </svg>
     </button>
+    <button id="lightbox-save-btn" class="lightbox-save-btn is-hidden" type="button" title="Save all changes">
+        <svg class="save-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+            <polyline points="7 3 7 8 15 8"></polyline>
+        </svg>
+    </button>
     <a class="prev">&#10094;</a>
     <div class="lightbox-content">
       <div id="lightbox-metadata-panel" class="lightbox-metadata-panel">
@@ -800,6 +807,17 @@
         </div>
       </div>
 
+      <!-- Unlock Editing Confirmation Modal -->
+      <div id="unlock-editing-confirm-modal" class="modal is-hidden">
+        <div class="modal-content-text">
+          <p>Do you want to unlock editing? All fields will become editable.</p>
+          <div class="modal-buttons">
+            <button id="unlock-editing-cancel-btn" class="button">Cancel</button>
+            <button id="unlock-editing-confirm-btn" class="button is-primary">Unlock Editing</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Clear All Confirmation Modal -->
       <div id="clear-all-confirm-modal" class="modal-overlay is-hidden">
         <div class="modal-content">
@@ -1020,6 +1038,7 @@
     const prevButton = document.querySelector('.prev');
     const nextButton = document.querySelector('.next');
     const lightboxLockBtn = document.getElementById('lightbox-lock-btn');
+    const lightboxSaveBtn = document.getElementById('lightbox-save-btn');
     const uploadButton = document.getElementById('upload-button');
     const librarySearchInput = document.getElementById('library-search-input');
     const libraryGrid = document.getElementById('library-grid');
@@ -1136,6 +1155,11 @@
     const deleteUploadImageConfirmModal = document.getElementById('delete-upload-image-confirm-modal');
     const deleteUploadImageCancelBtn = document.getElementById('delete-upload-image-cancel-btn');
     const deleteUploadImageConfirmBtn = document.getElementById('delete-upload-image-confirm-btn');
+
+    // Unlock editing confirmation modal elements
+    const unlockEditingConfirmModal = document.getElementById('unlock-editing-confirm-modal');
+    const unlockEditingCancelBtn = document.getElementById('unlock-editing-cancel-btn');
+    const unlockEditingConfirmBtn = document.getElementById('unlock-editing-confirm-btn');
 
     // Clear all confirmation modal elements
     const clearAllConfirmModal = document.getElementById('clear-all-confirm-modal');
@@ -1828,10 +1852,10 @@
             .lightbox-lock-btn {
                 position: fixed;
                 top: 20px;
-                right: 20px;
+                right: 70px;
                 z-index: 1001;
-                background: rgba(255, 255, 255, 0.95);
-                border: 2px solid #333;
+                background: #dc3545;
+                border: 2px solid #dc3545;
                 border-radius: 50%;
                 width: 48px;
                 height: 48px;
@@ -1845,7 +1869,8 @@
             }
             
             .lightbox-lock-btn:hover {
-                background: rgba(255, 255, 255, 1);
+                background: #c82333;
+                border-color: #c82333;
                 transform: scale(1.1);
                 box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             }
@@ -1861,25 +1886,66 @@
             .lightbox-lock-btn .lock-icon {
                 width: 20px;
                 height: 20px;
-                stroke: #333;
+                stroke: #fff;
+                fill: none;
                 transition: stroke 0.3s ease;
             }
             
-            .lightbox-lock-btn:hover .lock-icon {
-                stroke: #2196f3;
-            }
-            
-            .lightbox-lock-btn.unlocked .lock-icon {
-                stroke: #4caf50;
-            }
-            
             .lightbox-lock-btn.unlocked {
-                border-color: #4caf50;
-                background: rgba(76, 175, 80, 0.1);
+                background: #28a745;
+                border-color: #28a745;
+                right: 120px;
             }
             
             .lightbox-lock-btn.unlocked:hover {
-                background: rgba(76, 175, 80, 0.2);
+                background: #218838;
+                border-color: #218838;
+            }
+            
+            .lightbox-lock-btn.unlocked .lock-icon {
+                stroke: #fff;
+            }
+            
+            .lightbox-save-btn {
+                position: fixed;
+                top: 20px;
+                right: 70px;
+                z-index: 1001;
+                background: #007bff;
+                border: 2px solid #007bff;
+                border-radius: 50%;
+                width: 48px;
+                height: 48px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                padding: 0;
+            }
+            
+            .lightbox-save-btn:hover {
+                background: #0056b3;
+                border-color: #0056b3;
+                transform: scale(1.1);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+            
+            .lightbox-save-btn:active {
+                transform: scale(0.95);
+            }
+            
+            .lightbox-save-btn.is-hidden {
+                display: none !important;
+            }
+            
+            .lightbox-save-btn .save-icon {
+                width: 20px;
+                height: 20px;
+                stroke: #fff;
+                fill: none;
+                transition: stroke 0.3s ease;
             }
         `;
         document.head.appendChild(style);
@@ -3820,10 +3886,19 @@
                 body: JSON.stringify({ feelings: payload })
             });
             if (!response.ok) {
-                throw new Error(`Failed to persist feelings: ${response.status} ${response.statusText}`);
+                let errorText;
+                try {
+                    errorText = await response.text();
+                } catch (e) {
+                    errorText = `HTTP ${response.status} ${response.statusText}`;
+                }
+                throw new Error(`Failed to persist feelings: ${response.status} ${response.statusText} - ${errorText}`);
             }
         } catch (err) {
             console.error('Error persisting feelings usage:', err);
+            // Don't throw - this is a non-critical operation
+            // But log it clearly for debugging
+            console.warn('Feelings usage update failed, but continuing with save operation');
         }
     }
 
@@ -4032,6 +4107,7 @@
         const freqFloating = document.getElementById('lightbox-freq-floating');
         if (freqFloating) freqFloating.remove();
         if (lightboxLockBtn) lightboxLockBtn.classList.add('is-hidden');
+        if (lightboxSaveBtn) lightboxSaveBtn.classList.add('is-hidden');
         pendingAddTags.clear();
         lightboxDirty = false;
         
@@ -4053,6 +4129,7 @@
         pendingAddTags.clear();
         lightboxDirty = false;
         if (lightboxLockBtn) lightboxLockBtn.classList.add('is-hidden');
+        if (lightboxSaveBtn) lightboxSaveBtn.classList.add('is-hidden');
     }
 
     // --- Library Lightbox Functions ---
@@ -4408,6 +4485,11 @@
             }
             lightboxLockBtn.classList.remove('unlocked');
             lightboxLockBtn.title = 'Click to unlock editing';
+            lightboxLockBtn.style.right = '70px';
+        }
+        // Hide save button when locked
+        if (lightboxSaveBtn) {
+            lightboxSaveBtn.classList.add('is-hidden');
         }
 
         // Lock metadata fields
@@ -4419,12 +4501,20 @@
             field.style.cursor = 'not-allowed';
         });
 
-        // Lock frequency panel items
+        // Lock frequency panel items (but preserve disabled state for already-added tags)
         const freqItems = document.querySelectorAll('.lightbox-freq-item');
         freqItems.forEach(item => {
-            item.style.pointerEvents = 'none';
-            item.style.opacity = '0.5';
-            item.style.cursor = 'not-allowed';
+            // If item is already disabled (tag already in image), keep it disabled
+            if (item.classList.contains('disabled')) {
+                item.style.pointerEvents = 'none';
+                item.style.opacity = '0.4'; // Keep disabled opacity
+                item.style.cursor = 'not-allowed';
+            } else {
+                // For non-disabled items, apply lock styling
+                item.style.pointerEvents = 'none';
+                item.style.opacity = '0.5';
+                item.style.cursor = 'not-allowed';
+            }
         });
 
         // Lock tag input field
@@ -4464,10 +4554,16 @@
             // Update to unlocked icon (open lock - shackle is open)
             const lockIcon = lightboxLockBtn.querySelector('.lock-icon');
             if (lockIcon) {
-                lockIcon.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 5-5 5 5 0 0 1 5 5v4"></path><path d="M12 16v-2"></path>';
+                lockIcon.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 5-5 5 5 0 0 1 5 5"></path><line x1="12" y1="16" x2="12" y2="22"></line>';
             }
             lightboxLockBtn.classList.add('unlocked');
             lightboxLockBtn.title = 'Click to lock editing';
+            lightboxLockBtn.style.right = '120px';
+        }
+        // Show save button when unlocked (positioned at 70px, between close and lock)
+        if (lightboxSaveBtn) {
+            lightboxSaveBtn.style.right = '70px';
+            lightboxSaveBtn.classList.remove('is-hidden');
         }
 
         // Unlock metadata fields
@@ -4479,12 +4575,20 @@
             field.style.cursor = 'text';
         });
 
-        // Unlock frequency panel items
+        // Unlock frequency panel items (but preserve disabled state for already-added tags)
         const freqItems = document.querySelectorAll('.lightbox-freq-item');
         freqItems.forEach(item => {
-            item.style.pointerEvents = 'auto';
-            item.style.opacity = '1';
-            item.style.cursor = 'pointer';
+            // If item is disabled (tag already in image), keep it disabled
+            if (item.classList.contains('disabled')) {
+                item.style.pointerEvents = 'none';
+                item.style.opacity = '0.4'; // Keep disabled opacity
+                item.style.cursor = 'not-allowed';
+            } else {
+                // For non-disabled items, restore normal interactivity
+                item.style.pointerEvents = 'auto';
+                item.style.opacity = '1';
+                item.style.cursor = 'pointer';
+            }
         });
 
         // Unlock tag input field
@@ -4515,6 +4619,7 @@
         renderLightboxFreqFloating(libraryImages[index].id);
         modal.classList.remove('is-hidden');
         if (lightboxLockBtn) lightboxLockBtn.classList.remove('is-hidden');
+        if (lightboxSaveBtn && !lightboxLocked) lightboxSaveBtn.classList.remove('is-hidden');
         // Lock all fields after rendering (with small delay to ensure DOM is ready)
         setTimeout(() => {
             lockLightboxFields();
@@ -4532,6 +4637,7 @@
             renderLightboxFreqFloating(libraryImages[index].id);
         }
         if (lightboxLockBtn) lightboxLockBtn.classList.remove('is-hidden');
+        if (lightboxSaveBtn && !lightboxLocked) lightboxSaveBtn.classList.remove('is-hidden');
         // Lock all fields after rendering (with small delay to ensure DOM is ready)
         setTimeout(() => {
             lockLightboxFields();
@@ -5260,6 +5366,106 @@
         }
     }
 
+    // Save all lightbox changes (metadata and tags)
+    async function saveAllLightboxChanges() {
+        if (currentPreviewIndex < 0 || currentPreviewIndex >= libraryImages.length) {
+            showLightboxToast('No image selected');
+            return;
+        }
+
+        const image = libraryImages[currentPreviewIndex];
+        if (!image) {
+            showLightboxToast('Image not found');
+            return;
+        }
+
+        if (!image.id) {
+            console.error('Image missing ID:', image);
+            alert('Error: Image is missing an ID. Cannot save changes.');
+            return;
+        }
+
+        console.log('Starting save operation for image:', image.id);
+        try {
+            // Collect metadata from fields
+            const metadataFields = ['book', 'page', 'row', 'column', 'type', 'material', 'width', 'length', 'brand', 'color', 'remark'];
+            const metadataTags = [];
+            
+            metadataFields.forEach(field => {
+                const fieldElement = document.querySelector(`.lightbox-metadata-value[data-field="${field}"]`);
+                if (fieldElement) {
+                    const value = fieldElement.textContent.trim();
+                    if (value) {
+                        metadataTags.push(`${field}:${value}`);
+                    }
+                }
+            });
+
+            // Handle pattern field separately (it's a dropdown, not contenteditable)
+            const patternDropdownText = document.querySelector('.lightbox-pattern-dropdown-text');
+            if (patternDropdownText && patternDropdownText.textContent !== 'Select Pattern...') {
+                const patternName = patternDropdownText.textContent.trim();
+                if (patternName) {
+                    metadataTags.push(`pattern:${patternName}`);
+                }
+            }
+
+            // Get current tags and filter out old metadata tags
+            const metadataPrefixes = ['book:', 'page:', 'row:', 'column:', 'type:', 'material:', 'width:', 'length:', 'pattern:', 'brand:', 'color:', 'remark:'];
+            const currentTags = image.tags || [];
+            const nonMetadataTags = currentTags.filter(tag => {
+                const tagLower = tag.toLowerCase();
+                return !metadataPrefixes.some(prefix => tagLower.startsWith(prefix));
+            });
+
+            // Combine non-metadata tags, new metadata tags, and pending tags
+            const allTags = [...new Set([...nonMetadataTags, ...metadataTags, ...pendingAddTags])];
+
+            // Save tags
+            await updateImageTags(image.id, allTags);
+            image.tags = allTags;
+
+            // Increment feelings usage for subjective tags (no prefix)
+            const newSubjectiveTags = [...pendingAddTags].filter(tag => !tag.includes(':'));
+            if (newSubjectiveTags.length > 0) {
+                await persistFeelingsUsage(newSubjectiveTags);
+                await fetchSubjFrequencies();
+            }
+
+            pendingAddTags.clear();
+            lightboxDirty = false;
+            
+            // Ensure the image in libraryImages array is updated (in case it's a different reference)
+            const imageInArray = libraryImages.find(img => img.id === image.id);
+            if (imageInArray) {
+                imageInArray.tags = allTags;
+            }
+            
+            // Refresh display
+            displayLightboxTags(currentPreviewIndex);
+            displayLightboxMetadata(currentPreviewIndex);
+            // Re-render frequency list with updated tags
+            renderLightboxFreqFloating(image.id);
+            
+            // Hide save button and lock fields after save
+            if (lightboxSaveBtn) {
+                lightboxSaveBtn.classList.add('is-hidden');
+            }
+            lockLightboxFields(); // This will change lock icon to locked state
+            
+            showLightboxToast('All changes saved');
+        } catch (err) {
+            console.error('Failed to save changes:', err);
+            const errorMessage = err.message || err.toString() || 'Unknown error';
+            console.error('Error details:', {
+                message: errorMessage,
+                imageId: image?.id,
+                stack: err.stack
+            });
+            alert(`Failed to save changes: ${errorMessage}\n\nPlease check the browser console for more details.`);
+        }
+    }
+
     function renderLightboxFreqFloating(imageId) {
         // Prefer the preview overlay if it's visible; otherwise use the lightbox modal
         const overlay = (imagePreviewOverlay && imagePreviewOverlay.classList.contains('show'))
@@ -5312,7 +5518,30 @@
         } else {
             // Determine current tags for disable state
             const image = libraryImages.find(img => img.id === imageId);
-            const existingTags = new Set([...(image?.tags || []), ...pendingAddTags]);
+            if (!image) {
+                console.warn('Image not found for frequency rendering:', imageId);
+                return;
+            }
+            
+            // Get all tags (including pending) and filter to only subjective tags (no colon) for comparison
+            // Normalize tags: trim whitespace and convert to lowercase for comparison
+            const normalizeTag = (tag) => String(tag).trim().toLowerCase();
+            
+            // Get all tags from image and pending tags
+            const imageTags = Array.isArray(image.tags) ? image.tags : [];
+            const pendingTagsArray = Array.from(pendingAddTags);
+            const allTags = [...imageTags, ...pendingTagsArray];
+            
+            // Filter to only subjective tags (no colon) and normalize
+            const subjectiveTags = allTags
+                .map(tag => String(tag).trim())
+                .filter(tag => {
+                    const trimmed = tag.trim();
+                    return trimmed.length > 0 && !trimmed.includes(':');
+                });
+            
+            const existingTags = new Set(subjectiveTags.map(normalizeTag));
+            
             freqItems.forEach(({ label, count }) => {
                 const row = document.createElement('div');
                 row.className = 'lightbox-freq-item';
@@ -5322,20 +5551,38 @@
                 countSpan.textContent = `×${count}`;
                 row.appendChild(nameSpan);
                 row.appendChild(countSpan);
-                const isUsed = Array.from(existingTags).some(t => t.toLowerCase() === label.toLowerCase());
+                
+                // Check if this frequency tag is already in the image's subjective tags
+                const labelNormalized = normalizeTag(label);
+                const isUsed = existingTags.has(labelNormalized);
+                
+                // Always disable if tag is already in image (regardless of lock state)
                 if (isUsed) {
                     row.classList.add('disabled');
+                    // Always prevent interaction when disabled (regardless of lock state)
+                    row.style.pointerEvents = 'none';
+                } else {
+                    // Make sure non-disabled items don't have pointerEvents set to none
+                    row.style.pointerEvents = '';
                 }
-                row.addEventListener('click', () => {
+                
+                row.addEventListener('click', (e) => {
+                    // Always prevent click if disabled (regardless of lock state)
+                    if (row.classList.contains('disabled')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        showLightboxToast('Tag already added');
+                        return false;
+                    }
+                    
+                    // Check lock state only for non-disabled items
                     if (lightboxLocked) {
                         showLightboxToast('Fields are locked. Click the lock icon to unlock.');
-                        return;
+                        return false;
                     }
-                    if (row.classList.contains('disabled')) {
-                        showLightboxToast('Tag already added');
-                        return;
-                    }
+                    
                     handleAddTagToImage(imageId, label);
+                    return false;
                 });
                 list.appendChild(row);
             });
@@ -8507,11 +8754,18 @@
     }
 
     async function updateImageTags(imageId, tags) {
+        if (!imageId || isNaN(imageId)) {
+            throw new Error(`Invalid image ID: ${imageId}`);
+        }
+        
         console.log(`Updating tags for image ${imageId}:`, tags);
         console.log(`Making PUT request to: ${API_URL}/images/${imageId}/tags`);
 
         try {
             const sessionToken = localStorage.getItem('sessionToken');
+            if (!sessionToken) {
+                console.warn('No session token found - request may fail if authentication is required');
+            }
             const headers = {
                 'Content-Type': 'application/json',
             };
@@ -8527,16 +8781,43 @@
             console.log(`Response status: ${response.status} ${response.statusText}`);
 
             if (!response.ok) {
-                const errorText = await response.text();
+                let errorText;
+                try {
+                    errorText = await response.text();
+                    // Try to parse as JSON if possible
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorText = errorJson.error || errorJson.message || errorText;
+                    } catch (e) {
+                        // Not JSON, use as-is
+                    }
+                } catch (e) {
+                    errorText = `HTTP ${response.status} ${response.statusText}`;
+                }
                 console.error(`Server error response:`, errorText);
-                throw new Error(`Failed to update tags for image ${imageId}: ${response.status} ${response.statusText} - ${errorText}`);
+                throw new Error(`Failed to update tags: ${response.status} ${response.statusText} - ${errorText}`);
             }
 
-            const result = await response.json();
+            let result;
+            try {
+                const responseText = await response.text();
+                if (responseText) {
+                    result = JSON.parse(responseText);
+                } else {
+                    result = { success: true };
+                }
+            } catch (parseError) {
+                console.warn('Failed to parse response as JSON, treating as success');
+                result = { success: true };
+            }
             console.log(`Successfully updated tags for image ${imageId}:`, result);
             return result;
         } catch (error) {
             console.error(`Network or parsing error for image ${imageId}:`, error);
+            // Re-throw with more context
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                throw new Error(`Network error: Unable to connect to server. Please check if the server is running at ${API_URL}`);
+            }
             throw error;
         }
     }
@@ -10578,13 +10859,33 @@
     if (lightboxLockBtn) {
         lightboxLockBtn.addEventListener('click', () => {
             if (lightboxLocked) {
-                // Show confirmation popup to unlock
-                if (confirm('Do you want to unlock editing? All fields will become editable.')) {
-                    unlockLightboxFields();
-                }
+                // Show confirmation modal to unlock
+                unlockEditingConfirmModal.classList.remove('is-hidden');
             } else {
                 // Lock the fields
                 lockLightboxFields();
+            }
+        });
+    }
+
+    // Unlock editing confirmation modal event listeners
+    if (unlockEditingCancelBtn) {
+        unlockEditingCancelBtn.addEventListener('click', () => {
+            unlockEditingConfirmModal.classList.add('is-hidden');
+        });
+    }
+    if (unlockEditingConfirmBtn) {
+        unlockEditingConfirmBtn.addEventListener('click', () => {
+            unlockEditingConfirmModal.classList.add('is-hidden');
+            unlockLightboxFields();
+        });
+    }
+
+    // Lightbox save button event listener
+    if (lightboxSaveBtn) {
+        lightboxSaveBtn.addEventListener('click', () => {
+            if (currentPreviewIndex >= 0 && currentPreviewIndex < libraryImages.length) {
+                saveAllLightboxChanges();
             }
         });
     }
